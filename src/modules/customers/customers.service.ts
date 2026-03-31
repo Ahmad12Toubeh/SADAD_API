@@ -23,7 +23,7 @@ export class CustomersService {
 
   async findAll(ownerUserId: string, query: QueryCustomersDto) {
     const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
+    const limit = query.limit ?? 50;
     const skip = (page - 1) * limit;
 
     const filter: FilterQuery<CustomerDocument> = {

@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SendReminderDto } from './dto/send-reminder.dto';
 import { RemindersService } from './reminders.service';
+import { AuthenticatedRequest } from '../../common/interfaces/authenticated-request.interface';
 
 @ApiTags('Reminders')
 @ApiBearerAuth()
@@ -14,14 +15,14 @@ export class RemindersController {
   @Get('overdue')
   @ApiOperation({ summary: 'List overdue installments' })
   @ApiResponse({ status: 200 })
-  overdue(@Req() req: any) {
+  overdue(@Req() req: AuthenticatedRequest) {
     return this.remindersService.overdue(req.user._id.toString());
   }
 
   @Get('upcoming')
   @ApiOperation({ summary: 'List upcoming installments' })
   @ApiResponse({ status: 200 })
-  upcoming(@Req() req: any, @Query('days') days?: string) {
+  upcoming(@Req() req: AuthenticatedRequest, @Query('days') days?: string) {
     const n = days ? Number(days) : 7;
     return this.remindersService.upcoming(req.user._id.toString(), Number.isFinite(n) ? n : 7);
   }
@@ -29,14 +30,14 @@ export class RemindersController {
   @Get('sent')
   @ApiOperation({ summary: 'List sent reminders' })
   @ApiResponse({ status: 200 })
-  sent(@Req() req: any) {
+  sent(@Req() req: AuthenticatedRequest) {
     return this.remindersService.sent(req.user._id.toString());
   }
 
   @Post('send')
   @ApiOperation({ summary: 'Send a reminder (mock provider) and store log' })
   @ApiResponse({ status: 201 })
-  send(@Req() req: any, @Body() dto: SendReminderDto) {
+  send(@Req() req: AuthenticatedRequest, @Body() dto: SendReminderDto) {
     return this.remindersService.send(req.user._id.toString(), dto);
   }
 }

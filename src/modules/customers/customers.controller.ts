@@ -6,6 +6,7 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { QueryCustomersDto } from './dto/query-customers.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomersService } from './customers.service';
+import { AuthenticatedRequest } from '../../common/interfaces/authenticated-request.interface';
 
 @ApiTags('Customers')
 @ApiBearerAuth()
@@ -20,14 +21,14 @@ export class CustomersController {
   @Post()
   @ApiOperation({ summary: 'Create customer' })
   @ApiResponse({ status: 201 })
-  create(@Req() req: any, @Body() dto: CreateCustomerDto) {
+  create(@Req() req: AuthenticatedRequest, @Body() dto: CreateCustomerDto) {
     return this.customersService.create(req.user._id.toString(), dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List customers (search/pagination)' })
   @ApiResponse({ status: 200 })
-  async findAll(@Req() req: any, @Query() query: QueryCustomersDto) {
+  async findAll(@Req() req: AuthenticatedRequest, @Query() query: QueryCustomersDto) {
     const res = await this.customersService.findAll(req.user._id.toString(), query);
     const ids = res.items.map((i: any) => i.id);
     const totals = await this.debtsService.calculateTotalDebts(req.user._id.toString(), ids);
@@ -44,7 +45,7 @@ export class CustomersController {
   @Get(':id')
   @ApiOperation({ summary: 'Get customer by id' })
   @ApiResponse({ status: 200 })
-  async findOne(@Req() req: any, @Param('id') id: string) {
+  async findOne(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     const customer = await this.customersService.findOne(req.user._id.toString(), id);
     const summary = await this.debtsService.getCustomerFinancialSummary(req.user._id.toString(), id);
     return {
@@ -56,21 +57,21 @@ export class CustomersController {
   @Patch(':id')
   @ApiOperation({ summary: 'Update customer' })
   @ApiResponse({ status: 200 })
-  update(@Req() req: any, @Param('id') id: string, @Body() dto: UpdateCustomerDto) {
+  update(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() dto: UpdateCustomerDto) {
     return this.customersService.update(req.user._id.toString(), id, dto);
   }
 
   @Get(':id/debts')
   @ApiOperation({ summary: 'List customer debts' })
   @ApiResponse({ status: 200 })
-  debts(@Req() req: any, @Param('id') id: string) {
+  debts(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.debtsService.listByCustomer(req.user._id.toString(), id);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete customer' })
   @ApiResponse({ status: 200 })
-  delete(@Req() req: any, @Param('id') id: string) {
+  delete(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.customersService.delete(req.user._id.toString(), id);
   }
 }

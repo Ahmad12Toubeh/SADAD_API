@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import * as dotenv from 'dotenv';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import helmet from 'helmet';
 
 dotenv.config();
 
@@ -25,8 +26,9 @@ async function bootstrap() {
 
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // Enable CORS
+  // Enable CORS & Security
   app.enableCors();
+  app.use(helmet());
 
   // Swagger Documentation
   const config = new DocumentBuilder()

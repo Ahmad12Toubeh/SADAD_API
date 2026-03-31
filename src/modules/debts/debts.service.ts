@@ -65,16 +65,32 @@ export class DebtsService {
     };
   }
 
-  async findAll(ownerUserId: string) {
-    const debts = await this.debtModel
-      .find({ ownerUserId: new Types.ObjectId(ownerUserId) })
-      .populate("customerId")
-      .sort({ createdAt: -1 })
-      .exec();
-    return { items: debts.map((d: any) => ({
-      ...this.toPublicDebt(d),
-      customerName: d.customerId?.name || "—",
-    })) };
+  async findAll(ownerUserId: string, query?: { page?: number; limit?: number }) {
+    const page = query?.page ? Number(query.page) : 1;
+    const limit = query?.limit ? Number(query.limit) : 50;
+    const skip = (page - 1) * limit;
+
+    const [debts, total] = await Promise.all([
+      this.debtModel
+        .find({ ownerUserId: new Types.ObjectId(ownerUserId) })
+        .populate("customerId")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.debtModel.countDocuments({ ownerUserId: new Types.ObjectId(ownerUserId) }).exec()
+    ]);
+
+    return { 
+      items: debts.map((d: any) => ({
+        ...this.toPublicDebt(d),
+        customerName: d.customerId?.name || "—",
+      })),
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async findOne(ownerUserId: string, id: string) {
