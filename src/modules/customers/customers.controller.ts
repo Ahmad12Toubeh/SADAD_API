@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DebtsService } from '../debts/debts.service';
@@ -27,15 +27,30 @@ export class CustomersController {
   @Get()
   @ApiOperation({ summary: 'List customers (search/pagination)' })
   @ApiResponse({ status: 200 })
-  findAll(@Req() req: any, @Query() query: QueryCustomersDto) {
-    return this.customersService.findAll(req.user._id.toString(), query);
+  async findAll(@Req() req: any, @Query() query: QueryCustomersDto) {
+    const res = await this.customersService.findAll(req.user._id.toString(), query);
+    const ids = res.items.map((i: any) => i.id);
+    const totals = await this.debtsService.calculateTotalDebts(req.user._id.toString(), ids);
+
+    return {
+      ...res,
+      items: res.items.map((i: any) => ({
+        ...i,
+        totalDebt: totals[i.id] ?? 0,
+      })),
+    };
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get customer by id' })
   @ApiResponse({ status: 200 })
-  findOne(@Req() req: any, @Param('id') id: string) {
-    return this.customersService.findOne(req.user._id.toString(), id);
+  async findOne(@Req() req: any, @Param('id') id: string) {
+    const customer = await this.customersService.findOne(req.user._id.toString(), id);
+    const summary = await this.debtsService.getCustomerFinancialSummary(req.user._id.toString(), id);
+    return {
+      ...customer,
+      summary,
+    };
   }
 
   @Patch(':id')
@@ -50,6 +65,13 @@ export class CustomersController {
   @ApiResponse({ status: 200 })
   debts(@Req() req: any, @Param('id') id: string) {
     return this.debtsService.listByCustomer(req.user._id.toString(), id);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete customer' })
+  @ApiResponse({ status: 200 })
+  delete(@Req() req: any, @Param('id') id: string) {
+    return this.customersService.delete(req.user._id.toString(), id);
   }
 }
 

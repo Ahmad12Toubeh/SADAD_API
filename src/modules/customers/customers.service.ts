@@ -73,6 +73,15 @@ export class CustomersService {
     return this.toPublic(doc);
   }
 
+  async delete(ownerUserId: string, id: string) {
+    const doc = await this.customerModel.findOneAndDelete({
+      _id: id,
+      ownerUserId: new Types.ObjectId(ownerUserId),
+    });
+    if (!doc) throw new NotFoundException('Customer not found');
+    return { success: true };
+  }
+
   toPublic(doc: CustomerDocument | Customer) {
     const obj = (doc as any).toObject ? (doc as any).toObject() : (doc as any);
     return {

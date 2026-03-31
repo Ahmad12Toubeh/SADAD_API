@@ -65,6 +65,18 @@ export class DebtsService {
     };
   }
 
+  async findAll(ownerUserId: string) {
+    const debts = await this.debtModel
+      .find({ ownerUserId: new Types.ObjectId(ownerUserId) })
+      .populate("customerId")
+      .sort({ createdAt: -1 })
+      .exec();
+    return { items: debts.map((d: any) => ({
+      ...this.toPublicDebt(d),
+      customerName: d.customerId?.name || "—",
+    })) };
+  }
+
   async findOne(ownerUserId: string, id: string) {
     const debt = await this.debtModel.findOne({
       _id: id,
@@ -72,14 +84,18 @@ export class DebtsService {
     });
     if (!debt) throw new NotFoundException('Debt not found');
 
-    const installments = await this.installmentModel
-      .find({ ownerUserId: new Types.ObjectId(ownerUserId), debtId: debt._id })
-      .sort({ dueDate: 1 })
-      .exec();
+    const [installments, guarantor] = await Promise.all([
+      this.installmentModel
+        .find({ ownerUserId: new Types.ObjectId(ownerUserId), debtId: debt._id })
+        .sort({ dueDate: 1 })
+        .exec(),
+      this.guarantorsService.findOne(ownerUserId, debt._id.toString()).catch(() => null),
+    ]);
 
     return {
       debt: this.toPublicDebt(debt),
       installments: installments.map((i) => this.toPublicInstallment(i)),
+      guarantor: guarantor || null,
     };
   }
 
@@ -104,12 +120,59 @@ export class DebtsService {
     return { items: debts.map((d) => this.toPublicDebt(d)) };
   }
 
+  async calculateTotalDebts(ownerUserId: string, customerIds: string[]) {
+    const results = await this.debtModel.aggregate([
+      {
+        $match: {
+          ownerUserId: new Types.ObjectId(ownerUserId),
+          customerId: { $in: customerIds.map((id) => new Types.ObjectId(id)) },
+          status: { $ne: 'paid' },
+        },
+      },
+      {
+        $group: {
+          _id: '$customerId',
+          total: { $sum: '$principalAmount' },
+        },
+      },
+    ]);
+
+    const map: Record<string, number> = {};
+    results.forEach((r) => {
+      map[r._id.toString()] = r.total;
+    });
+    return map;
+  }
+
   async listInstallments(ownerUserId: string, debtId: string) {
     const items = await this.installmentModel
       .find({ ownerUserId: new Types.ObjectId(ownerUserId), debtId: new Types.ObjectId(debtId) })
       .sort({ dueDate: 1 })
       .exec();
     return { items: items.map((i) => this.toPublicInstallment(i)) };
+  }
+
+  async getCustomerFinancialSummary(ownerUserId: string, customerId: string) {
+    const debts = await this.debtModel.find({
+      ownerUserId: new Types.ObjectId(ownerUserId),
+      customerId: new Types.ObjectId(customerId),
+    }).exec();
+
+    const debtIds = debts.map(d => d._id);
+    const installments = await this.installmentModel.find({
+      ownerUserId: new Types.ObjectId(ownerUserId),
+      debtId: { $in: debtIds }
+    }).exec();
+
+    const totalDebt = debts.reduce((sum, d) => sum + d.principalAmount, 0);
+    const paidAmount = installments.filter(i => i.status === 'paid').reduce((sum, i) => sum + i.amount, 0);
+
+    return {
+      totalDebt,
+      paidAmount,
+      remainingAmount: totalDebt - paidAmount,
+      currency: debts[0]?.currency || 'SAR'
+    };
   }
 
   private async generateInstallments(ownerUserId: string, debt: DebtDocument, dto: CreateDebtDto) {
@@ -145,12 +208,26 @@ export class DebtsService {
     return this.installmentModel.insertMany(installments);
   }
 
+  async delete(ownerUserId: string, id: string) {
+    const doc = await this.debtModel.findOneAndDelete({
+      _id: id,
+      ownerUserId: new Types.ObjectId(ownerUserId),
+    });
+    if (!doc) throw new NotFoundException('Debt not found');
+
+    // Cleanup installments
+    await this.installmentModel.deleteMany({ debtId: doc._id }).exec();
+
+    return { success: true };
+  }
+
   private toPublicDebt(doc: DebtDocument | Debt) {
     const obj = (doc as any).toObject ? (doc as any).toObject() : (doc as any);
     return {
       id: obj._id?.toString?.() ?? obj.id,
       customerId: obj.customerId?.toString?.() ?? obj.customerId,
       principalAmount: obj.principalAmount,
+      type: obj.type,
       currency: obj.currency,
       planType: obj.planType,
       dueDate: obj.dueDate ?? null,

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateDebtDto } from './dto/create-debt.dto';
@@ -17,6 +17,13 @@ export class DebtsController {
   @ApiResponse({ status: 201 })
   create(@Req() req: any, @Body() dto: CreateDebtDto) {
     return this.debtsService.create(req.user._id.toString(), dto);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'List all debts' })
+  @ApiResponse({ status: 200 })
+  findAll(@Req() req: any) {
+    return this.debtsService.findAll(req.user._id.toString());
   }
 
   @Get(':id')
@@ -38,6 +45,13 @@ export class DebtsController {
   @ApiResponse({ status: 200 })
   installments(@Req() req: any, @Param('id') id: string) {
     return this.debtsService.listInstallments(req.user._id.toString(), id);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete debt' })
+  @ApiResponse({ status: 200 })
+  delete(@Req() req: any, @Param('id') id: string) {
+    return this.debtsService.delete(req.user._id.toString(), id);
   }
 }
 

@@ -11,8 +11,11 @@ export class Debt {
   @Prop({ type: Types.ObjectId, required: true, index: true })
   ownerUserId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, required: true, index: true })
+  @Prop({ type: Types.ObjectId, required: true, index: true, ref: 'Customer' })
   customerId: Types.ObjectId;
+
+  @Prop({ required: true, enum: ['invoice', 'loan', 'other'], default: 'invoice', index: true })
+  type: string;
 
   @Prop({ required: true })
   principalAmount: number;

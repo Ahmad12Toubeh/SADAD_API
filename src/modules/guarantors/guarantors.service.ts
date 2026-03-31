@@ -69,17 +69,38 @@ export class GuarantorsService {
     return this.toPublic(guarantor);
   }
 
+  async findOne(ownerUserId: string, debtId: string) {
+    const doc = await this.guarantorModel.findOne({
+      ownerUserId: new Types.ObjectId(ownerUserId),
+      debtId: new Types.ObjectId(debtId),
+    });
+    if (!doc) throw new NotFoundException('Guarantor not found');
+    return this.toPublic(doc);
+  }
+
   async list(ownerUserId: string, search?: string) {
     const filter: any = { ownerUserId: new Types.ObjectId(ownerUserId) };
     if (search?.trim()) {
       filter.$or = [
-        { name: new RegExp(search.trim(), 'i') },
-        { phone: new RegExp(search.trim(), 'i') },
+        { name: new RegExp(search.trim(), "i") },
+        { phone: new RegExp(search.trim(), "i") },
       ];
     }
 
-    const items = await this.guarantorModel.find(filter).sort({ createdAt: -1 }).limit(200).exec();
-    return { items: items.map((g) => this.toPublic(g)) };
+    const items = await this.guarantorModel
+      .find(filter)
+      .populate("debtId")
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .exec();
+
+    return {
+      items: items.map((g: any) => ({
+        ...this.toPublic(g),
+        totalDebt: g.debtId?.principalAmount || 0,
+        debtStatus: g.debtId?.status || "unknown",
+      })),
+    };
   }
 
   private toPublic(doc: GuarantorDocument | Guarantor) {
