@@ -27,7 +27,30 @@ export class PaymentsService {
     }
 
     const paidAt = dto.paidAt ? new Date(dto.paidAt) : new Date();
-    const amount = dto.amount ?? installment.amount;
+    const [paidAgg] = await this.paymentModel
+      .aggregate([
+        {
+          $match: {
+            ownerUserId: new Types.ObjectId(ownerUserId),
+            installmentId: installment._id,
+          },
+        },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ])
+      .exec();
+    const alreadyPaid = paidAgg?.total ?? 0;
+    const remaining = Math.max(0, installment.amount - alreadyPaid);
+    if (remaining <= 0) {
+      throw new BadRequestException('Installment already paid');
+    }
+
+    const amount = dto.amount ?? remaining;
+    if (amount <= 0) {
+      throw new BadRequestException('Payment amount must be greater than zero');
+    }
+    if (amount > remaining) {
+      throw new BadRequestException('Payment amount exceeds remaining installment balance');
+    }
 
     const payment = await this.paymentModel.create({
       ownerUserId: new Types.ObjectId(ownerUserId),
@@ -39,8 +62,11 @@ export class PaymentsService {
       paidAt,
     });
 
-    installment.status = 'paid';
-    installment.paidAt = paidAt;
+    const totalAfterPayment = alreadyPaid + amount;
+    if (totalAfterPayment >= installment.amount) {
+      installment.status = 'paid';
+      installment.paidAt = paidAt;
+    }
     await installment.save();
 
     await this.recomputeDebtStatus(ownerUserId, installment.debtId.toString());
@@ -53,6 +79,7 @@ export class PaymentsService {
       method: payment.method,
       note: payment.note ?? null,
       paidAt: payment.paidAt,
+      remainingAmount: Math.max(0, installment.amount - totalAfterPayment),
       createdAt: (payment as any).createdAt,
     };
   }

@@ -14,11 +14,13 @@ export class UsersService {
     email: string;
     password: string;
     fullName: string;
+    phone?: string;
   }): Promise<UserDocument> {
     const passwordHash = await bcrypt.hash(userData.password, 10);
     const newUser = new this.userModel({
       email: userData.email,
       fullName: userData.fullName,
+      phone: userData.phone,
       passwordHash,
     });
     return newUser.save();

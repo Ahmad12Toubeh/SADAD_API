@@ -1,9 +1,12 @@
 import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UserDocument } from '../users/schemas/user.schema';
+import { StoreSettings, StoreSettingsDocument } from '../settings/schemas/store-settings.schema';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -11,6 +14,8 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    @InjectModel(StoreSettings.name)
+    private readonly storeModel: Model<StoreSettingsDocument>,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<UserDocument> {
@@ -19,7 +24,18 @@ export class AuthService {
     if (existingUser) {
       throw new ConflictException('Email already registered');
     }
-    return this.usersService.create(registerDto);
+    const user = await this.usersService.create(registerDto);
+    if (registerDto.storeName) {
+      await this.storeModel.findOneAndUpdate(
+        { ownerUserId: new Types.ObjectId(user._id.toString()) },
+        {
+          $set: { storeName: registerDto.storeName },
+          $setOnInsert: { currency: 'SAR' },
+        },
+        { upsert: true, new: true },
+      );
+    }
+    return user;
   }
 
   async login(loginDto: LoginDto): Promise<{ accessToken: string; user: any }> {

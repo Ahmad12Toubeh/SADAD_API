@@ -58,8 +58,24 @@ export class RemindersService {
       .limit(200)
       .exec();
 
+    const customerIds = Array.from(
+      new Set(
+        items
+          .map((r) => r.customerId?.toString?.())
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    const customers = customerIds.length
+      ? await this.customerModel
+          .find({ ownerUserId: new Types.ObjectId(ownerUserId), _id: { $in: customerIds } })
+          .exec()
+      : [];
+    const customerById = new Map(customers.map((c) => [c._id.toString(), c]));
+
     return {
       items: items.map((r) => ({
+        customer: r.customerId ? customerById.get(r.customerId.toString())?.name ?? null : null,
+        customerName: r.customerId ? customerById.get(r.customerId.toString())?.name ?? null : null,
         id: r._id.toString(),
         channel: r.channel,
         status: r.status,
