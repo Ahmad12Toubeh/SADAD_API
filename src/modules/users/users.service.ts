@@ -33,7 +33,7 @@ export class UsersService {
   async findByEmailWithPassword(email: string): Promise<UserDocument | undefined> {
     return this.userModel
       .findOne({ email })
-      .select('+passwordHash +password')
+      .select('+passwordHash +password +resetPasswordTokenHash +resetPasswordTokenExpiresAt')
       .exec();
   }
 
@@ -51,6 +51,37 @@ export class UsersService {
     return this.userModel
       .findByIdAndUpdate(userId, { $set: { passwordHash }, $unset: { password: '' } }, { new: true })
       .select('+passwordHash +password')
+      .exec();
+  }
+
+  async setResetPasswordToken(email: string, tokenHash: string, expiresAt: Date) {
+    return this.userModel
+      .findOneAndUpdate(
+        { email },
+        { $set: { resetPasswordTokenHash: tokenHash, resetPasswordTokenExpiresAt: expiresAt } },
+        { new: true },
+      )
+      .select('+resetPasswordTokenHash +resetPasswordTokenExpiresAt')
+      .exec();
+  }
+
+  async findByResetTokenHash(tokenHash: string): Promise<UserDocument | undefined> {
+    return this.userModel
+      .findOne({
+        resetPasswordTokenHash: tokenHash,
+        resetPasswordTokenExpiresAt: { $gt: new Date() },
+      })
+      .select('+passwordHash +password +resetPasswordTokenHash +resetPasswordTokenExpiresAt')
+      .exec();
+  }
+
+  async clearResetPasswordToken(userId: string) {
+    return this.userModel
+      .findByIdAndUpdate(
+        userId,
+        { $unset: { resetPasswordTokenHash: '', resetPasswordTokenExpiresAt: '' } },
+        { new: true },
+      )
       .exec();
   }
 }

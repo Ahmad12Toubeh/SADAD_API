@@ -27,7 +27,13 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   // Enable CORS & Security
-  app.enableCors();
+  const corsOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((item) => item.trim())
+    : true;
+  app.enableCors({
+    origin: corsOrigins,
+    credentials: true,
+  });
   app.use(helmet());
 
   // Swagger Documentation
