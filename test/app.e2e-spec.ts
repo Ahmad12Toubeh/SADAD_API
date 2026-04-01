@@ -6,15 +6,17 @@ import { AppModule } from '../src/app.module';
 
 describe('SADAD API (e2e)', () => {
   let app: INestApplication;
-  let mongo: MongoMemoryServer;
+  let mongo: MongoMemoryServer | null = null;
   let accessToken: string;
   let customerId: string;
   let debtId: string;
   let installmentId: string;
 
   beforeAll(async () => {
-    mongo = await MongoMemoryServer.create();
-    process.env.MONGODB_URI = mongo.getUri();
+    if (!process.env.MONGODB_URI) {
+      mongo = await MongoMemoryServer.create();
+      process.env.MONGODB_URI = mongo.getUri();
+    }
     process.env.JWT_SECRET = 'test-secret';
     process.env.JWT_EXPIRATION = '1h';
 
@@ -28,8 +30,8 @@ describe('SADAD API (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
-    await mongo.stop();
+    if (app) await app.close();
+    if (mongo) await mongo.stop();
   });
 
   it('register -> login -> me', async () => {
@@ -52,6 +54,19 @@ describe('SADAD API (e2e)', () => {
       .expect(200);
 
     expect(meRes.body.email).toBe('a@test.com');
+  });
+
+  it('rejects unauthorized access', async () => {
+    await request(app.getHttpServer())
+      .get('/api/customers?page=1&limit=10')
+      .expect(401);
+  });
+
+  it('rejects invalid reset token', async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/reset-password')
+      .send({ token: 'bad-token', newPassword: 'newpass123' })
+      .expect(400);
   });
 
   it('customers CRUD basic', async () => {
@@ -100,6 +115,13 @@ describe('SADAD API (e2e)', () => {
 
     debtId = debtRes.body.debt.id;
     installmentId = debtRes.body.installments[0].id;
+    const installmentAmount = debtRes.body.installments[0].amount;
+
+    await request(app.getHttpServer())
+      .post(`/api/installments/${installmentId}/payments`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ method: 'cash', amount: installmentAmount + 1 })
+      .expect(400);
 
     await request(app.getHttpServer())
       .post(`/api/installments/${installmentId}/payments`)
@@ -130,4 +152,3 @@ describe('SADAD API (e2e)', () => {
       .expect(200);
   });
 });
-

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -15,6 +16,7 @@ import { RemindersModule } from './modules/reminders/reminders.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { AssociationsModule } from './modules/associations/associations.module';
+import { MaintenanceModule } from './common/maintenance/maintenance.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { AssociationsModule } from './modules/associations/associations.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+
+    ScheduleModule.forRoot(),
 
     // Rate Limiting
     ThrottlerModule.forRoot([{
@@ -53,6 +57,7 @@ import { AssociationsModule } from './modules/associations/associations.module';
     AnalyticsModule,
     SettingsModule,
     AssociationsModule,
+    MaintenanceModule,
   ],
   controllers: [AppController],
   providers: [

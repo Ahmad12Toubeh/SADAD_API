@@ -166,7 +166,12 @@ export class AuthService {
       }
     }
 
-    // Fallback for local development
-    this.logger.log(`Password reset URL for ${email}: ${resetUrl}`);
+    const allowLog =
+      this.configService.get<string>('AUTH_RETURN_RESET_TOKEN') === 'true' ||
+      process.env.NODE_ENV !== 'production';
+    if (allowLog) {
+      // Fallback for local development
+      this.logger.log(`Password reset URL for ${email}: ${resetUrl}`);
+    }
   }
 }
