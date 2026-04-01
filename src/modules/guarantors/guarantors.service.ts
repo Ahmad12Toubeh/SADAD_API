@@ -97,6 +97,7 @@ export class GuarantorsService {
     return {
       items: items.map((g: any) => ({
         ...this.toPublic(g),
+        debtId: g.debtId?._id?.toString?.() ?? g.debtId?.toString?.() ?? null,
         totalDebt: g.debtId?.principalAmount || 0,
         debtStatus: g.debtId?.status || "unknown",
       })),
@@ -118,4 +119,3 @@ export class GuarantorsService {
     };
   }
 }
-
