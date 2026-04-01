@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateAssociationDto } from './dto/create-association.dto';
+import { ApproveFundTransactionDto, FundTransactionDto } from './dto/fund-transaction.dto';
 import { UpdateAssociationDto } from './dto/update-association.dto';
 import { AssociationsService } from './associations.service';
 import { AuthenticatedRequest } from '../../common/interfaces/authenticated-request.interface';
@@ -40,5 +41,36 @@ export class AssociationsController {
   update(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() dto: UpdateAssociationDto) {
     return this.associationsService.update(req.user._id.toString(), id, dto);
   }
-}
 
+  @Post(':id/close-month')
+  @ApiOperation({ summary: 'Close month and advance cycle' })
+  @ApiResponse({ status: 200 })
+  closeMonth(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.associationsService.closeMonth(req.user._id.toString(), id);
+  }
+
+  @Post(':id/fund-transaction')
+  @ApiOperation({ summary: 'Add fund transaction (family fund)' })
+  @ApiResponse({ status: 200 })
+  addFundTransaction(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() dto: FundTransactionDto) {
+    return this.associationsService.addFundTransaction(req.user._id.toString(), id, dto);
+  }
+
+  @Post(':id/fund-transaction/approve')
+  @ApiOperation({ summary: 'Approve fund transaction (requires 2 approvals)' })
+  @ApiResponse({ status: 200 })
+  approveFundTransaction(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: ApproveFundTransactionDto,
+  ) {
+    return this.associationsService.approveFundTransaction(req.user._id.toString(), id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete association' })
+  @ApiResponse({ status: 200 })
+  remove(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.associationsService.remove(req.user._id.toString(), id);
+  }
+}
