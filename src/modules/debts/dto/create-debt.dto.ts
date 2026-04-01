@@ -3,15 +3,15 @@ import { Type } from 'class-transformer';
 import { IsBoolean, IsDateString, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class GuarantorInputDto {
-  @ApiProperty({ example: 'أحمد محمد عبدالله' })
+  @ApiProperty({ example: 'Ahmed Abdullah' })
   @IsString()
   name: string;
 
-  @ApiProperty({ example: '+966501234567' })
+  @ApiProperty({ example: '+962791234567' })
   @IsString()
   phone: string;
 
-  @ApiPropertyOptional({ example: 'ملاحظات' })
+  @ApiPropertyOptional({ example: 'Optional notes' })
   @IsOptional()
   @IsString()
   notes?: string;
@@ -38,7 +38,12 @@ export class CreateDebtDto {
   @Min(1)
   principalAmount: number;
 
-  @ApiPropertyOptional({ example: 'SAR', default: 'SAR' })
+  @ApiPropertyOptional({ enum: ['invoice', 'loan', 'other'], example: 'invoice' })
+  @IsOptional()
+  @IsIn(['invoice', 'loan', 'other'])
+  type?: 'invoice' | 'loan' | 'other';
+
+  @ApiPropertyOptional({ example: 'JOD', default: 'JOD' })
   @IsOptional()
   @IsString()
   currency?: string;
@@ -52,12 +57,12 @@ export class CreateDebtDto {
   @IsDateString()
   dueDate?: string;
 
-  @ApiPropertyOptional({ example: 'مديونية جديدة (بضاعة)' })
+  @ApiPropertyOptional({ example: 'New debt (inventory)' })
   @IsOptional()
   @IsString()
   category?: string;
 
-  @ApiPropertyOptional({ example: 'ملاحظات' })
+  @ApiPropertyOptional({ example: 'Optional notes' })
   @IsOptional()
   @IsString()
   notes?: string;
@@ -77,4 +82,3 @@ export class CreateDebtDto {
   @Type(() => GuarantorInputDto)
   guarantor?: GuarantorInputDto;
 }
-

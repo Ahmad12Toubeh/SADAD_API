@@ -26,7 +26,7 @@ import { AssociationsModule } from './modules/associations/associations.module';
 
     // Rate Limiting
     ThrottlerModule.forRoot([{
-      ttl: 60000,
+      ttl: 60,
       limit: 100,
     }]),
 

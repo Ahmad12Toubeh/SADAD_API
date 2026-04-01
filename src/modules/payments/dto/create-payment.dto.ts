@@ -13,7 +13,7 @@ export class CreatePaymentDto {
   @IsString()
   method?: string;
 
-  @ApiPropertyOptional({ example: 'سداد نقدي' })
+  @ApiPropertyOptional({ example: 'Cash payment' })
   @IsOptional()
   @IsString()
   note?: string;
@@ -23,4 +23,3 @@ export class CreatePaymentDto {
   @IsDateString()
   paidAt?: string;
 }
-

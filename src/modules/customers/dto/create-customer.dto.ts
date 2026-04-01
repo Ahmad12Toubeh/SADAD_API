@@ -7,7 +7,7 @@ export class CreateCustomerDto {
   @IsIn(['individual', 'company'])
   type: CustomerType;
 
-  @ApiProperty({ example: 'شركة الأفق المحدودة' })
+  @ApiProperty({ example: 'Horizon Limited' })
   @IsString()
   @MinLength(2)
   name: string;
@@ -22,7 +22,7 @@ export class CreateCustomerDto {
   @IsEmail()
   email?: string;
 
-  @ApiPropertyOptional({ example: 'الرياض، حي العليا' })
+  @ApiPropertyOptional({ example: 'Riyadh, Olaya district' })
   @IsOptional()
   @IsString()
   address?: string;
@@ -32,7 +32,7 @@ export class CreateCustomerDto {
   @IsString()
   cr?: string;
 
-  @ApiPropertyOptional({ example: 'عميل مهم' })
+  @ApiPropertyOptional({ example: 'Important customer' })
   @IsOptional()
   @IsString()
   notes?: string;
@@ -42,4 +42,3 @@ export class CreateCustomerDto {
   @IsIn(['regular', 'late', 'defaulting'])
   status?: CustomerStatus;
 }
-

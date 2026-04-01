@@ -43,6 +43,7 @@ export class DebtsService {
     const debt = await this.debtModel.create({
       ownerUserId: new Types.ObjectId(ownerUserId),
       customerId: new Types.ObjectId(dto.customerId),
+      type: dto.type ?? 'invoice',
       principalAmount: dto.principalAmount,
       currency: dto.currency ?? 'SAR',
       planType: dto.planType,
@@ -239,9 +240,13 @@ export class DebtsService {
 
   private toPublicDebt(doc: DebtDocument | Debt) {
     const obj = (doc as any).toObject ? (doc as any).toObject() : (doc as any);
+    const customerId =
+      typeof obj.customerId === 'object' && obj.customerId?._id
+        ? obj.customerId._id.toString()
+        : obj.customerId?.toString?.() ?? obj.customerId;
     return {
       id: obj._id?.toString?.() ?? obj.id,
-      customerId: obj.customerId?.toString?.() ?? obj.customerId,
+      customerId,
       principalAmount: obj.principalAmount,
       type: obj.type,
       currency: obj.currency,
@@ -270,4 +275,3 @@ export class DebtsService {
     };
   }
 }
-
