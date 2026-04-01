@@ -45,7 +45,7 @@ export class CreateDebtDto {
 
   @ApiPropertyOptional({ example: 'JOD', default: 'JOD' })
   @IsOptional()
-  @IsString()
+  @IsIn(['JOD'])
   currency?: string;
 
   @ApiProperty({ enum: ['one_time', 'installments'], example: 'installments' })

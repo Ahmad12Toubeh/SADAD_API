@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 
 export class UpdateStoreSettingsDto {
   @ApiPropertyOptional()
@@ -24,6 +24,6 @@ export class UpdateStoreSettingsDto {
 
   @ApiPropertyOptional({ example: 'JOD' })
   @IsOptional()
-  @IsString()
+  @IsIn(['JOD'])
   currency?: string;
 }
