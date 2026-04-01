@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { Debt } from '../../debts/schemas/debt.schema';
 
 export type GuarantorDocument = Guarantor & Document;
 export type GuarantorStatus = 'inactive' | 'active';
@@ -9,7 +10,7 @@ export class Guarantor {
   @Prop({ type: Types.ObjectId, required: true, index: true })
   ownerUserId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, required: true, index: true, unique: true })
+  @Prop({ type: Types.ObjectId, required: true, index: true, unique: true, ref: Debt.name })
   debtId: Types.ObjectId;
 
   @Prop({ required: true, trim: true })
@@ -30,4 +31,3 @@ export class Guarantor {
 
 export const GuarantorSchema = SchemaFactory.createForClass(Guarantor);
 GuarantorSchema.index({ ownerUserId: 1, status: 1, createdAt: -1 });
-

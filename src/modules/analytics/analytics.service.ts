@@ -34,19 +34,28 @@ export class AnalyticsService {
     const [
       activeDebtAgg,
       collectedThisMonthAgg,
+      newDebtsThisMonthAgg,
       overdueAgg,
       activeCustomers,
+      statusAgg,
+      installmentsAgg,
     ] = await Promise.all([
       this.debtModel
         .aggregate([
           { $match: { ownerUserId: owner, status: { $in: ['active', 'late', 'bad'] } } },
-          { $group: { _id: null, total: { $sum: '$principalAmount' } } },
+          { $group: { _id: null, total: { $sum: '$principalAmount' }, count: { $sum: 1 } } },
         ])
         .exec(),
       this.paymentModel
         .aggregate([
           { $match: { ownerUserId: owner, paidAt: { $gte: monthStart, $lt: nextMonthStart } } },
           { $group: { _id: null, total: { $sum: '$amount' } } },
+        ])
+        .exec(),
+      this.debtModel
+        .aggregate([
+          { $match: { ownerUserId: owner, createdAt: { $gte: monthStart, $lt: nextMonthStart } } },
+          { $group: { _id: null, total: { $sum: '$principalAmount' } } },
         ])
         .exec(),
       this.installmentModel
@@ -62,13 +71,54 @@ export class AnalyticsService {
         ])
         .exec(),
       this.customerModel.countDocuments({ ownerUserId: owner }).exec(),
+      this.debtModel
+        .aggregate([
+          { $match: { ownerUserId: owner } },
+          { $group: { _id: '$status', count: { $sum: 1 } } },
+        ])
+        .exec(),
+      this.installmentModel
+        .aggregate([
+          { $match: { ownerUserId: owner } },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: '$amount' },
+              paid: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } },
+            },
+          },
+        ])
+        .exec(),
     ]);
 
+    const activeDebtTotal = activeDebtAgg[0]?.total ?? 0;
+    const activeDebtCount = activeDebtAgg[0]?.count ?? 0;
+    const avgDebtAmount = activeDebtCount > 0 ? activeDebtTotal / activeDebtCount : 0;
+
+    const statusDistribution: Record<string, number> = {
+      paid: 0,
+      active: 0,
+      late: 0,
+      bad: 0,
+    };
+    for (const row of statusAgg ?? []) {
+      if (row?._id) statusDistribution[row._id] = row.count ?? 0;
+    }
+
+    const newDebtsThisMonth = newDebtsThisMonthAgg[0]?.total ?? 0;
+    const collectedThisMonth = collectedThisMonthAgg[0]?.total ?? 0;
+    const collectionRate = newDebtsThisMonth > 0 ? (collectedThisMonth / newDebtsThisMonth) * 100 : 0;
+
     return {
-      totalActiveDebt: activeDebtAgg[0]?.total ?? 0,
-      collectedThisMonth: collectedThisMonthAgg[0]?.total ?? 0,
+      totalActiveDebt: activeDebtTotal,
+      activeDebtCount,
+      collectedThisMonth,
+      newDebtsThisMonth,
       overdueAmount: overdueAgg[0]?.total ?? 0,
       activeCustomers,
+      avgDebtAmount,
+      collectionRate,
+      statusDistribution,
       currency: 'SAR',
     };
   }
@@ -126,4 +176,3 @@ export class AnalyticsService {
     return { items: out, currency: 'SAR' };
   }
 }
-
