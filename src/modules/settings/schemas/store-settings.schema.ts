@@ -20,9 +20,8 @@ export class StoreSettings {
   @Prop({ required: false, trim: true })
   cr?: string;
 
-  @Prop({ required: true, default: 'SAR' })
+  @Prop({ required: true, default: 'JOD' })
   currency: string;
 }
 
 export const StoreSettingsSchema = SchemaFactory.createForClass(StoreSettings);
-

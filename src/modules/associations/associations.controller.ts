@@ -67,6 +67,13 @@ export class AssociationsController {
     return this.associationsService.approveFundTransaction(req.user._id.toString(), id, dto);
   }
 
+  @Post(':id/reopen-cycle')
+  @ApiOperation({ summary: 'Reopen cycle (unlock order)' })
+  @ApiResponse({ status: 200 })
+  reopenCycle(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.associationsService.reopenCycle(req.user._id.toString(), id);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Delete association' })
   @ApiResponse({ status: 200 })

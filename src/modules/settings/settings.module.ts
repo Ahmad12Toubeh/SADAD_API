@@ -16,6 +16,6 @@ import { StoreSettings, StoreSettingsSchema } from './schemas/store-settings.sch
   ],
   controllers: [SettingsController],
   providers: [SettingsService],
+  exports: [SettingsService],
 })
 export class SettingsModule {}
-

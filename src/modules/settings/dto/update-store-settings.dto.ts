@@ -22,9 +22,8 @@ export class UpdateStoreSettingsDto {
   @IsString()
   cr?: string;
 
-  @ApiPropertyOptional({ example: 'SAR' })
+  @ApiPropertyOptional({ example: 'JOD' })
   @IsOptional()
   @IsString()
   currency?: string;
 }
-

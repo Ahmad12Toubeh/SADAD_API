@@ -119,7 +119,7 @@ export class AnalyticsService {
       avgDebtAmount,
       collectionRate,
       statusDistribution,
-      currency: 'SAR',
+      currency: 'JOD',
     };
   }
 
@@ -173,6 +173,6 @@ export class AnalyticsService {
       out.push({ year: y, month: m, debts: row.debts, collected: row.collected });
     }
 
-    return { items: out, currency: 'SAR' };
+    return { items: out, currency: 'JOD' };
   }
 }

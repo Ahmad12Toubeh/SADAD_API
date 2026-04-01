@@ -1,15 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { ConfigService } from '@nestjs/config';
 import { CreateAssociationDto } from './dto/create-association.dto';
 import { UpdateAssociationDto } from './dto/update-association.dto';
 import { Association, AssociationDocument } from './schemas/association.schema';
+import { UsersService } from '../users/users.service';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class AssociationsService {
+  private readonly logger = new Logger(AssociationsService.name);
   constructor(
     @InjectModel(Association.name)
     private readonly associationModel: Model<AssociationDocument>,
+    private readonly usersService: UsersService,
+    private readonly settingsService: SettingsService,
+    private readonly configService: ConfigService,
   ) {}
 
   async create(ownerUserId: string, dto: CreateAssociationDto) {
@@ -189,6 +196,7 @@ export class AssociationsService {
     if (doc.currentMonth >= 1) doc.lockOrder = true;
 
     await doc.save();
+    await this.sendCloseMonthNotifications(ownerUserId, doc);
     return this.toPublic(doc);
   }
 
@@ -222,6 +230,27 @@ export class AssociationsService {
         createdAt: new Date(),
       },
     ];
+    await doc.save();
+    return this.toPublic(doc);
+  }
+
+  async reopenCycle(ownerUserId: string, id: string) {
+    const doc = await this.associationModel.findOne({
+      _id: id,
+      ownerUserId: new Types.ObjectId(ownerUserId),
+    });
+    if (!doc) throw new NotFoundException('Association not found');
+
+    doc.lockOrder = false;
+    doc.currentMonth = 0;
+    doc.cycleHistory = [];
+    doc.paymentLogs = [];
+    doc.membersList = (doc.membersList ?? []).map((m: any, idx) => ({
+      ...m,
+      isPaid: false,
+      paidAt: undefined,
+      isReceiver: doc.associationKind === 'family' ? false : idx === 0,
+    }));
     await doc.save();
     return this.toPublic(doc);
   }
@@ -314,5 +343,72 @@ export class AssociationsService {
       }));
     }
     return normalized;
+  }
+
+  private async sendCloseMonthNotifications(ownerUserId: string, doc: AssociationDocument) {
+    try {
+      const settings = await this.settingsService.getNotifications(ownerUserId);
+      const user = await this.usersService.findById(ownerUserId);
+      const unpaid = (doc.membersList ?? []).filter((m: any) => !m.isPaid);
+      const unpaidNames = unpaid.map((m: any) => m.name || '-').join(', ');
+      const title = `Association ${doc.name ?? ''} closed month ${doc.currentMonth}`;
+      const body = `Month closed. Paid: ${(doc.membersList ?? []).length - unpaid.length}, Unpaid: ${unpaid.length}. Unpaid: ${unpaidNames}`;
+
+      // Email via Resend
+      const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
+      const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL');
+      if (user?.email && resendApiKey && fromEmail) {
+        try {
+          const response = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${resendApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              from: fromEmail,
+              to: [user.email],
+              subject: title,
+              html: `<p>${body}</p>`,
+            }),
+          });
+          if (!response.ok) {
+            const text = await response.text();
+            this.logger.warn(`Resend failed (${response.status}): ${text}`);
+          }
+        } catch (err: any) {
+          this.logger.warn(`Resend error: ${err?.message ?? String(err)}`);
+        }
+      }
+
+      // WhatsApp Cloud API (if configured)
+      if (settings.whatsappEnabled && settings.customWhatsappNumber) {
+        const token = this.configService.get<string>('WHATSAPP_TOKEN');
+        const phoneId = this.configService.get<string>('WHATSAPP_PHONE_ID');
+        if (token && phoneId) {
+          try {
+            await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                messaging_product: 'whatsapp',
+                to: settings.customWhatsappNumber,
+                type: 'text',
+                text: { body: `${title}\n${body}` },
+              }),
+            });
+          } catch (err: any) {
+            this.logger.warn(`WhatsApp send failed: ${err?.message ?? String(err)}`);
+          }
+        } else {
+          this.logger.log(`WhatsApp not configured. Message: ${title} - ${body}`);
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`Notification error: ${err?.message ?? String(err)}`);
+    }
   }
 }

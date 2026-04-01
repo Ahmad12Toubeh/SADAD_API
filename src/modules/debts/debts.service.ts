@@ -45,7 +45,7 @@ export class DebtsService {
       customerId: new Types.ObjectId(dto.customerId),
       type: dto.type ?? 'invoice',
       principalAmount: dto.principalAmount,
-      currency: dto.currency ?? 'SAR',
+      currency: dto.currency ?? 'JOD',
       planType: dto.planType,
       dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
       category: dto.category,
@@ -188,7 +188,7 @@ export class DebtsService {
       totalDebt,
       paidAmount,
       remainingAmount: totalDebt - paidAmount,
-      currency: debts[0]?.currency || 'SAR'
+      currency: debts[0]?.currency || 'JOD'
     };
   }
 

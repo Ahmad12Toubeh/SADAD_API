@@ -37,7 +37,7 @@ export class AuthService {
         { ownerUserId: new Types.ObjectId(user._id.toString()) },
         {
           $set: { storeName: registerDto.storeName },
-          $setOnInsert: { currency: 'SAR' },
+          $setOnInsert: { currency: 'JOD' },
         },
         { upsert: true, new: true },
       );

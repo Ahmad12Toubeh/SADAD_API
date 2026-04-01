@@ -20,7 +20,7 @@ export class Debt {
   @Prop({ required: true })
   principalAmount: number;
 
-  @Prop({ required: true, default: 'SAR' })
+  @Prop({ required: true, default: 'JOD' })
   currency: string;
 
   @Prop({ required: true, enum: ['one_time', 'installments'] })
@@ -44,4 +44,3 @@ export class Debt {
 
 export const DebtSchema = SchemaFactory.createForClass(Debt);
 DebtSchema.index({ ownerUserId: 1, customerId: 1, createdAt: -1 });
-

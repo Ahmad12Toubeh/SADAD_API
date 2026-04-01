@@ -50,7 +50,7 @@ export class SettingsService {
     const doc = await this.storeModel.findOne({ ownerUserId: new Types.ObjectId(ownerUserId) }).exec();
     if (!doc) {
       return {
-        currency: 'SAR',
+        currency: 'JOD',
         storeName: null,
         businessType: null,
         address: null,
@@ -69,7 +69,7 @@ export class SettingsService {
   async updateStore(ownerUserId: string, dto: UpdateStoreSettingsDto) {
     const doc = await this.storeModel.findOneAndUpdate(
       { ownerUserId: new Types.ObjectId(ownerUserId) },
-      { $set: { ...dto }, $setOnInsert: { currency: dto.currency ?? 'SAR' } },
+      { $set: { ...dto }, $setOnInsert: { currency: dto.currency ?? 'JOD' } },
       { upsert: true, new: true },
     );
     return {
@@ -146,4 +146,3 @@ export class SettingsService {
     return { ok: true };
   }
 }
-
