@@ -32,6 +32,12 @@ export class Customer {
   @Prop({ required: false, trim: true })
   notes?: string;
 
+  @Prop({ required: false, trim: true })
+  proofImageUrl?: string;
+
+  @Prop({ required: false, trim: true })
+  proofImagePublicId?: string;
+
   @Prop({ required: true, enum: ['regular', 'late', 'defaulting'], default: 'regular' })
   status: CustomerStatus;
 }
@@ -39,4 +45,3 @@ export class Customer {
 export const CustomerSchema = SchemaFactory.createForClass(Customer);
 CustomerSchema.index({ ownerUserId: 1, phone: 1 }, { unique: false });
 CustomerSchema.index({ ownerUserId: 1, name: 'text', phone: 'text', email: 'text' });
-

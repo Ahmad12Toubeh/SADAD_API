@@ -22,6 +22,12 @@ export class Guarantor {
   @Prop({ required: false, trim: true })
   notes?: string;
 
+  @Prop({ required: false, trim: true })
+  proofImageUrl?: string;
+
+  @Prop({ required: false, trim: true })
+  proofImagePublicId?: string;
+
   @Prop({ required: true, enum: ['inactive', 'active'], default: 'inactive', index: true })
   status: GuarantorStatus;
 

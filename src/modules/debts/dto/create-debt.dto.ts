@@ -15,6 +15,16 @@ export class GuarantorInputDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({ example: 'https://res.cloudinary.com/.../guarantor-id.jpg' })
+  @IsOptional()
+  @IsString()
+  proofImageUrl?: string;
+
+  @ApiPropertyOptional({ example: 'sadad/guarantors/user123/image_abc' })
+  @IsOptional()
+  @IsString()
+  proofImagePublicId?: string;
 }
 
 export class InstallmentsPlanDto {

@@ -17,6 +17,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { AssociationsModule } from './modules/associations/associations.module';
 import { MaintenanceModule } from './common/maintenance/maintenance.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { MaintenanceModule } from './common/maintenance/maintenance.module';
     AnalyticsModule,
     SettingsModule,
     AssociationsModule,
+    UploadsModule,
     MaintenanceModule,
   ],
   controllers: [AppController],

@@ -126,6 +126,8 @@ export class DebtsService {
             name: guarantor.name ?? null,
             phone: guarantor.phone ?? null,
             notes: guarantor.notes ?? null,
+            proofImageUrl: guarantor.proofImageUrl ?? null,
+            proofImagePublicId: guarantor.proofImagePublicId ?? null,
             active: guarantor.active ?? false,
           }
         : null,

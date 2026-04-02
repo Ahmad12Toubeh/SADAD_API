@@ -37,6 +37,16 @@ export class CreateCustomerDto {
   @IsString()
   notes?: string;
 
+  @ApiPropertyOptional({ example: 'https://res.cloudinary.com/.../customer-id.jpg' })
+  @IsOptional()
+  @IsString()
+  proofImageUrl?: string;
+
+  @ApiPropertyOptional({ example: 'sadad/customers/user123/image_abc' })
+  @IsOptional()
+  @IsString()
+  proofImagePublicId?: string;
+
   @ApiPropertyOptional({ enum: ['regular', 'late', 'defaulting'], example: 'regular' })
   @IsOptional()
   @IsIn(['regular', 'late', 'defaulting'])

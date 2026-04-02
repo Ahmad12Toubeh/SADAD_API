@@ -93,10 +93,11 @@ export class CustomersService {
       address: obj.address ?? null,
       cr: obj.cr ?? null,
       notes: obj.notes ?? null,
+      proofImageUrl: obj.proofImageUrl ?? null,
+      proofImagePublicId: obj.proofImagePublicId ?? null,
       status: obj.status,
       createdAt: obj.createdAt,
       updatedAt: obj.updatedAt,
     };
   }
 }
-

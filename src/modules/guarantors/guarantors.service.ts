@@ -17,7 +17,7 @@ export class GuarantorsService {
   async upsertForDebt(
     ownerUserId: string,
     debtId: Types.ObjectId,
-    input: { name: string; phone: string; notes?: string },
+    input: { name: string; phone: string; notes?: string; proofImageUrl?: string; proofImagePublicId?: string },
   ) {
     const doc = await this.guarantorModel.findOneAndUpdate(
       { ownerUserId: new Types.ObjectId(ownerUserId), debtId },
@@ -26,6 +26,8 @@ export class GuarantorsService {
           name: input.name,
           phone: input.phone,
           notes: input.notes,
+          proofImageUrl: input.proofImageUrl,
+          proofImagePublicId: input.proofImagePublicId,
         },
         $setOnInsert: { status: 'inactive' },
       },
@@ -112,6 +114,8 @@ export class GuarantorsService {
       name: obj.name,
       phone: obj.phone,
       notes: obj.notes ?? null,
+      proofImageUrl: obj.proofImageUrl ?? null,
+      proofImagePublicId: obj.proofImagePublicId ?? null,
       status: obj.status,
       activatedAt: obj.activatedAt ?? null,
       createdAt: obj.createdAt,
