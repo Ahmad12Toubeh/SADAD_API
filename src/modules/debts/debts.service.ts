@@ -38,6 +38,15 @@ export class DebtsService {
       throw new BadRequestException('installmentsPlan is required for installments debts');
     }
 
+    if (dto.dueDate) {
+      const parsed = new Date(dto.dueDate);
+      const year = parsed.getUTCFullYear();
+      if (Number.isNaN(parsed.getTime()) || year < 2000 || year > 2100) {
+        throw new BadRequestException('Invalid dueDate; please use a valid date between years 2000 and 2100.');
+      }
+      dto.dueDate = parsed.toISOString();
+    }
+
     const hasGuarantor = Boolean(dto.hasGuarantor ?? dto.guarantor);
 
     const debt = await this.debtModel.create({
@@ -109,8 +118,22 @@ export class DebtsService {
       this.guarantorsService.findOne(ownerUserId, debt._id.toString()).catch(() => null),
     ]);
 
+    const debtPublic = {
+      ...this.toPublicDebt(debt),
+      guarantor: guarantor
+        ? {
+            id: guarantor._id?.toString?.() ?? undefined,
+            name: guarantor.name ?? null,
+            phone: guarantor.phone ?? null,
+            notes: guarantor.notes ?? null,
+            active: guarantor.active ?? false,
+          }
+        : null,
+      guarantorActive: guarantor?.active ?? false,
+    };
+
     return {
-      debt: this.toPublicDebt(debt),
+      debt: debtPublic,
       installments: installments.map((i) => this.toPublicInstallment(i)),
       guarantor: guarantor || null,
     };

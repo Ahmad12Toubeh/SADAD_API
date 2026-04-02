@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Cron } from '@nestjs/schedule';
+import * as nodemailer from 'nodemailer';
 import { Customer, CustomerDocument } from '../customers/schemas/customer.schema';
 import { Debt, DebtDocument } from '../debts/schemas/debt.schema';
 import { Installment, InstallmentDocument } from '../installments/schemas/installment.schema';
@@ -108,52 +109,133 @@ export class RemindersService {
   }
 
   async send(ownerUserId: string, dto: SendReminderDto) {
-    if (!dto.installmentId) {
-      throw new BadRequestException('installmentId is required for v1');
+    if (!dto.installmentId && !dto.debtId) {
+      throw new BadRequestException('Either installmentId or debtId is required');
     }
 
-    const installment = await this.installmentModel.findOne({
-      _id: dto.installmentId,
-      ownerUserId: new Types.ObjectId(ownerUserId),
-    });
+    const ownerObjectId = new Types.ObjectId(ownerUserId);
+    let installment: InstallmentDocument | null = null;
+
+    if (dto.installmentId) {
+      installment = await this.installmentModel.findOne({
+        _id: dto.installmentId,
+        ownerUserId: ownerObjectId,
+      });
+    } else if (dto.debtId) {
+      installment = await this.installmentModel
+        .findOne({
+          debtId: new Types.ObjectId(dto.debtId),
+          ownerUserId: ownerObjectId,
+          status: { $ne: 'paid' },
+        })
+        .sort({ dueDate: 1 })
+        .exec();
+    }
+
     if (!installment) throw new NotFoundException('Installment not found');
 
     const debt = await this.debtModel.findOne({
       _id: installment.debtId,
-      ownerUserId: new Types.ObjectId(ownerUserId),
+      ownerUserId: ownerObjectId,
     });
     if (!debt) throw new NotFoundException('Debt not found');
 
     const customer = await this.customerModel.findOne({
       _id: debt.customerId,
-      ownerUserId: new Types.ObjectId(ownerUserId),
+      ownerUserId: ownerObjectId,
     });
 
+    const defaultMessage = this.buildCustomerReminderMessage(
+      customer?.name ?? 'العميل',
+      Number(installment.amount ?? 0),
+      installment.dueDate,
+    );
+    const reminderMessage = dto.message?.trim() ? dto.message.trim() : defaultMessage;
+
+    if (dto.channel === 'whatsapp') {
+      if (!customer?.phone) {
+        throw new BadRequestException({
+          message: 'Customer phone is required to send WhatsApp reminder',
+          messageKey: 'errors.reminders.phoneRequired',
+        });
+      }
+
+      const whatsappLink = this.buildWhatsappLink(customer.phone, reminderMessage);
+      const reminder = await this.reminderModel.create({
+        ownerUserId: ownerObjectId,
+        channel: dto.channel,
+        status: 'sent',
+        installmentId: installment._id,
+        debtId: debt._id,
+        customerId: customer?._id,
+        sentAt: new Date(),
+        payload: {
+          message: reminderMessage,
+          whatsappLink,
+          mode: 'manual_open',
+        },
+      });
+
+      return {
+        id: reminder._id.toString(),
+        status: reminder.status,
+        channel: reminder.channel,
+        sentAt: reminder.sentAt,
+        whatsappLink,
+      };
+    }
+
+    if (!customer?.email) {
+      throw new BadRequestException({
+        message: 'Customer email is required to send email reminder',
+        messageKey: 'errors.reminders.emailRequired',
+      });
+    }
+
     const reminder = await this.reminderModel.create({
-      ownerUserId: new Types.ObjectId(ownerUserId),
+      ownerUserId: ownerObjectId,
       channel: dto.channel,
       status: 'queued',
       installmentId: installment._id,
       debtId: debt._id,
       customerId: customer?._id,
       payload: {
-        message:
-          dto.message ??
-          `Reminder: installment due ${installment.dueDate.toISOString()} amount ${installment.amount}`,
+        message: reminderMessage,
       },
     });
 
-    // Mock provider: mark as sent immediately.
-    reminder.status = 'sent';
-    reminder.sentAt = new Date();
-    await reminder.save();
+    try {
+      await this.sendCustomerReminderEmail({
+        to: customer.email,
+        customerName: customer.name ?? 'العميل',
+        amount: Number(installment.amount ?? 0),
+        dueDate: installment.dueDate,
+        customMessage: reminderMessage,
+      });
 
-    return {
-      id: reminder._id.toString(),
-      status: reminder.status,
-      channel: reminder.channel,
-      sentAt: reminder.sentAt,
-    };
+      reminder.status = 'sent';
+      reminder.sentAt = new Date();
+      await reminder.save();
+
+      return {
+        id: reminder._id.toString(),
+        status: reminder.status,
+        channel: reminder.channel,
+        sentAt: reminder.sentAt,
+      };
+    } catch (error: any) {
+      reminder.status = 'failed';
+      reminder.error = error?.message ?? String(error);
+      await reminder.save();
+      const message = reminder.error ?? '';
+      const lower = typeof message === 'string' ? message.toLowerCase() : '';
+      const isSmtpMissing =
+        lower.includes('smtp') && (lower.includes('missing') || lower.includes('required') || lower.includes('credentials'));
+      throw new BadRequestException({
+        message,
+        messageKey: isSmtpMissing ? 'errors.reminders.smtpMissing' : 'errors.reminders.emailSendFailed',
+      });
+    }
   }
 
   private async processDailyAutomation() {
@@ -380,48 +462,20 @@ export class RemindersService {
     debtId?: Types.ObjectId;
     customerId?: Types.ObjectId;
   }) {
-    const reminder = await this.reminderModel.create({
-      ownerUserId: new Types.ObjectId(input.ownerUserId),
-      channel: 'whatsapp',
-      status: 'queued',
-      installmentId: input.installmentId,
-      debtId: input.debtId,
-      customerId: input.customerId,
-      payload: { kind: input.channelKind, message: input.message },
-    });
-
     try {
-      const token = this.configService.get<string>('WHATSAPP_TOKEN');
-      const phoneId = this.configService.get<string>('WHATSAPP_PHONE_ID');
-      if (!token || !phoneId) throw new Error('WhatsApp credentials missing');
-
-      const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: input.settings.customWhatsappNumber,
-          type: 'text',
-          text: { body: input.message },
-        }),
+      const whatsappLink = this.buildWhatsappLink(input.settings.customWhatsappNumber, input.message);
+      await this.reminderModel.create({
+        ownerUserId: new Types.ObjectId(input.ownerUserId),
+        channel: 'whatsapp',
+        status: 'sent',
+        installmentId: input.installmentId,
+        debtId: input.debtId,
+        customerId: input.customerId,
+        sentAt: new Date(),
+        payload: { kind: input.channelKind, message: input.message, whatsappLink, mode: 'manual_open' },
       });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`WhatsApp API ${response.status}: ${text}`);
-      }
-
-      reminder.status = 'sent';
-      reminder.sentAt = new Date();
-      await reminder.save();
     } catch (err: any) {
-      reminder.status = 'failed';
-      reminder.error = err?.message ?? String(err);
-      await reminder.save();
-      this.logger.warn(`WhatsApp reminder failed: ${reminder.error}`);
+      this.logger.warn(`WhatsApp reminder failed: ${err?.message ?? String(err)}`);
     }
   }
 
@@ -445,28 +499,11 @@ export class RemindersService {
     });
 
     try {
-      const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
-      const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL');
-      if (!resendApiKey || !fromEmail) throw new Error('Resend credentials missing');
-
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: fromEmail,
-          to: [input.ownerEmail],
-          subject: 'SADAD Notification',
-          html: `<p>${input.message.replace(/\n/g, '<br/>')}</p>`,
-        }),
+      await this.sendEmailViaSmtp({
+        to: input.ownerEmail,
+        subject: 'SADAD Notification',
+        html: `<p>${input.message.replace(/\n/g, '<br/>')}</p>`,
       });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`Resend API ${response.status}: ${text}`);
-      }
 
       reminder.status = 'sent';
       reminder.sentAt = new Date();
@@ -483,6 +520,85 @@ export class RemindersService {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     return d;
+  }
+
+  private buildCustomerReminderMessage(customerName: string, amount: number, dueDate: Date) {
+    return `مرحباً ${customerName}،\nنذكرك بوجود قسط مستحق بقيمة ${amount} دينار بتاريخ ${this.formatDate(dueDate)}.\nيرجى الدفع 🙏`;
+  }
+
+  private formatDate(value: Date) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toISOString().slice(0, 10);
+  }
+
+  private buildWhatsappLink(phone: string, message: string) {
+    const normalizedPhone = String(phone).replace(/\D/g, '');
+    if (!normalizedPhone) {
+      throw new BadRequestException('Customer phone is invalid');
+    }
+    return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
+  }
+
+  private createSmtpTransport() {
+    const host = this.configService.get<string>('SMTP_HOST');
+    const port = Number(this.configService.get<string>('SMTP_PORT') ?? 587);
+    const secure = String(this.configService.get<string>('SMTP_SECURE') ?? 'false') === 'true';
+    const user = this.configService.get<string>('SMTP_USER');
+    const pass = this.configService.get<string>('SMTP_PASS');
+
+    if (!host || !port || !user || !pass) {
+      throw new BadRequestException({
+        message: 'SMTP credentials missing (SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS)',
+        messageKey: 'errors.reminders.smtpMissing',
+      });
+    }
+
+    return nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: { user, pass },
+    });
+  }
+
+  private async sendEmailViaSmtp(input: { to: string; subject: string; html: string }) {
+    const from = this.configService.get<string>('SMTP_FROM') ?? this.configService.get<string>('RESEND_FROM_EMAIL');
+    if (!from) {
+      throw new Error('SMTP_FROM is required');
+    }
+
+    const transporter = this.createSmtpTransport();
+    await transporter.sendMail({
+      from,
+      to: input.to,
+      subject: input.subject,
+      html: input.html,
+    });
+  }
+
+  private async sendCustomerReminderEmail(input: {
+    to: string;
+    customerName: string;
+    amount: number;
+    dueDate: Date;
+    customMessage: string;
+  }) {
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.7; color: #0f172a;">
+        <p>مرحباً ${input.customerName}،</p>
+        <p>نذكرك بوجود قسط مستحق بقيمة <strong>${input.amount} دينار</strong> بتاريخ <strong>${this.formatDate(input.dueDate)}</strong>.</p>
+        <p>يرجى الدفع 🙏</p>
+        <hr style="border:0;border-top:1px solid #e2e8f0;margin:16px 0;" />
+        <p style="font-size: 12px; color: #64748b;">${input.customMessage.replace(/\n/g, '<br/>')}</p>
+      </div>
+    `;
+
+    await this.sendEmailViaSmtp({
+      to: input.to,
+      subject: 'تذكير قسط - SADAD',
+      html,
+    });
   }
 
   private startOfWeek(date: Date) {
@@ -517,6 +633,7 @@ export class RemindersService {
           customerId: debt?.customerId?.toString?.() ?? null,
           customerName: customer?.name ?? null,
           customerPhone: customer?.phone ?? null,
+          customerEmail: customer?.email ?? null,
           amount: inst.amount,
           dueDate: inst.dueDate,
           status: inst.status,

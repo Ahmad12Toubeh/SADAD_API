@@ -35,10 +35,9 @@ export class RemindersController {
   }
 
   @Post('send')
-  @ApiOperation({ summary: 'Send a reminder (mock provider) and store log' })
+  @ApiOperation({ summary: 'Send reminder via WhatsApp deep-link or email SMTP and store log' })
   @ApiResponse({ status: 201 })
   send(@Req() req: AuthenticatedRequest, @Body() dto: SendReminderDto) {
     return this.remindersService.send(req.user._id.toString(), dto);
   }
 }
-
