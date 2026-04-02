@@ -12,6 +12,7 @@ import { StoreSettings, StoreSettingsDocument } from '../settings/schemas/store-
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class AuthService {
@@ -159,11 +160,31 @@ export class AuthService {
         if (!response.ok) {
           const body = await response.text();
           this.logger.warn(`Resend failed (${response.status}): ${body}`);
+        } else {
+          return;
         }
-        return;
       } catch (error: any) {
         this.logger.warn(`Resend request failed: ${error?.message ?? String(error)}`);
       }
+    }
+
+    try {
+      await this.sendEmailViaSmtp({
+        to: email,
+        subject: 'Reset your SADAD password',
+        html: `
+          <div style="font-family: Arial, sans-serif; line-height: 1.7; color: #0f172a;">
+            <p>Hello,</p>
+            <p>We received a request to reset your SADAD account password.</p>
+            <p>This link expires in 15 minutes:</p>
+            <p><a href="${resetUrl}">${resetUrl}</a></p>
+            <p>If you did not request this change, you can ignore this email.</p>
+          </div>
+        `,
+      });
+      return;
+    } catch (error: any) {
+      this.logger.warn(`SMTP password reset email failed: ${error?.message ?? String(error)}`);
     }
 
     const allowLog =
@@ -173,5 +194,39 @@ export class AuthService {
       // Fallback for local development
       this.logger.log(`Password reset URL for ${email}: ${resetUrl}`);
     }
+  }
+
+  private createSmtpTransport() {
+    const host = this.configService.get<string>('SMTP_HOST');
+    const port = Number(this.configService.get<string>('SMTP_PORT') ?? 587);
+    const secure = String(this.configService.get<string>('SMTP_SECURE') ?? 'false') === 'true';
+    const user = this.configService.get<string>('SMTP_USER');
+    const pass = this.configService.get<string>('SMTP_PASS');
+
+    if (!host || !port || !user || !pass) {
+      throw new Error('SMTP credentials missing');
+    }
+
+    return nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: { user, pass },
+    });
+  }
+
+  private async sendEmailViaSmtp(input: { to: string; subject: string; html: string }) {
+    const from = this.configService.get<string>('SMTP_FROM') ?? this.configService.get<string>('RESEND_FROM_EMAIL');
+    if (!from) {
+      throw new Error('SMTP_FROM is required');
+    }
+
+    const transporter = this.createSmtpTransport();
+    await transporter.sendMail({
+      from,
+      to: input.to,
+      subject: input.subject,
+      html: input.html,
+    });
   }
 }
