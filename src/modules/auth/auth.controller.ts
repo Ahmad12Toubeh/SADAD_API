@@ -8,7 +8,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthenticatedRequest } from '../../common/interfaces/authenticated-request.interface';
 import { Throttle } from '@nestjs/throttler';
-import { Response } from 'express';
+import { CookieOptions, Response } from 'express';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -56,11 +56,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout and clear auth cookie' })
   logout(@Res({ passthrough: true }) res: Response) {
     res.cookie('accessToken', '', {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      ...this.getAuthCookieOptions(),
       maxAge: 0,
-      path: '/',
     });
     return { success: true };
   }
@@ -77,12 +74,26 @@ export class AuthController {
 
   private setAuthCookie(res: Response, token: string) {
     res.cookie('accessToken', token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      ...this.getAuthCookieOptions(),
       maxAge: this.getAuthCookieMaxAgeMs(),
-      path: '/',
     });
+  }
+
+  private getAuthCookieOptions(): CookieOptions {
+    const sameSiteRaw = (process.env.AUTH_COOKIE_SAMESITE ?? 'lax').toLowerCase();
+    const secureRaw = process.env.AUTH_COOKIE_SECURE;
+    const secure = secureRaw ? secureRaw === 'true' : process.env.NODE_ENV === 'production';
+    const sameSite: CookieOptions['sameSite'] =
+      sameSiteRaw === 'none' || sameSiteRaw === 'strict' || sameSiteRaw === 'lax'
+        ? sameSiteRaw
+        : 'lax';
+
+    return {
+      httpOnly: true,
+      sameSite,
+      secure,
+      path: '/',
+    };
   }
 
   private getAuthCookieMaxAgeMs() {

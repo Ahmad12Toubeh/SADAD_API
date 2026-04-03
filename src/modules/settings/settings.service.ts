@@ -28,6 +28,8 @@ export class SettingsService {
           email: user.email,
           fullName: user.fullName,
           phone: user.phone ?? null,
+          avatarUrl: user.avatarUrl ?? null,
+          avatarPublicId: user.avatarPublicId ?? null,
           role: user.role,
         }
       : null;
@@ -41,6 +43,8 @@ export class SettingsService {
           email: user.email,
           fullName: user.fullName,
           phone: user.phone ?? null,
+          avatarUrl: user.avatarUrl ?? null,
+          avatarPublicId: user.avatarPublicId ?? null,
           role: user.role,
         }
       : null;

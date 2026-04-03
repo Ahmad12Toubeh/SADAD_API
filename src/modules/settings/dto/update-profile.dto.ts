@@ -12,4 +12,14 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @ApiPropertyOptional({ example: 'https://res.cloudinary.com/.../avatar.jpg' })
+  @IsOptional()
+  @IsString()
+  avatarUrl?: string;
+
+  @ApiPropertyOptional({ example: 'sadad/avatars/user123/avatar_abc' })
+  @IsOptional()
+  @IsString()
+  avatarPublicId?: string;
 }

@@ -21,6 +21,12 @@ export class User {
   @Prop({ required: false, trim: true })
   phone?: string;
 
+  @Prop({ required: false, trim: true })
+  avatarUrl?: string;
+
+  @Prop({ required: false, trim: true })
+  avatarPublicId?: string;
+
   @Prop({ default: 'user' }) // 'user' | 'admin'
   role: string;
 

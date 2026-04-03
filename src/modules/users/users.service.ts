@@ -41,7 +41,7 @@ export class UsersService {
     return this.userModel.findById(id).exec();
   }
 
-  async updateProfile(userId: string, dto: { fullName?: string; phone?: string }) {
+  async updateProfile(userId: string, dto: { fullName?: string; phone?: string; avatarUrl?: string; avatarPublicId?: string }) {
     return this.userModel
       .findByIdAndUpdate(userId, { $set: dto }, { new: true })
       .exec();
