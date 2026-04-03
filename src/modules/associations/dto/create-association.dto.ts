@@ -1,8 +1,8 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Min, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
-class AssociationMemberDto {
+export class AssociationMemberDto {
   @IsOptional()
   @IsString()
   id?: string;
@@ -37,10 +37,11 @@ export class CreateAssociationDto {
   @MinLength(2)
   name: string;
 
-  @ApiProperty({ example: 10, minimum: 2 })
+  @ApiPropertyOptional({ example: 10, minimum: 2 })
+  @IsOptional()
   @IsInt()
   @Min(2)
-  members: number;
+  members?: number;
 
   @ApiProperty({ example: 500, minimum: 1 })
   @IsInt()

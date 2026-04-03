@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsEmail, IsIn, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 import { CustomerStatus, CustomerType } from '../schemas/customer.schema';
+import { JORDAN_07_PHONE_MESSAGE, JORDAN_07_PHONE_REGEX } from '../../../common/validators/phone.validator';
 
 export class CreateCustomerDto {
   @ApiProperty({ enum: ['individual', 'company'], example: 'individual' })
@@ -13,8 +15,9 @@ export class CreateCustomerDto {
   name: string;
 
   @ApiProperty({ example: '0551234567' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
-  @MinLength(7)
+  @Matches(JORDAN_07_PHONE_REGEX, { message: JORDAN_07_PHONE_MESSAGE })
   phone: string;
 
   @ApiPropertyOptional({ example: 'info@horizon.com' })

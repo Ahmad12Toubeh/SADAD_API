@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
@@ -22,8 +22,9 @@ export class AssociationsService {
   async create(ownerUserId: string, dto: CreateAssociationDto) {
     const membersListRaw = dto.membersList ?? [];
     const associationKind = dto.associationKind ?? 'rotating';
-    const membersList = this.normalizeMembersList(membersListRaw, dto.members, associationKind);
-    const members = membersList.length > 0 ? membersList.length : dto.members;
+    const membersList = this.normalizeMembersList(membersListRaw, associationKind);
+    this.assertValidAssociationMembers(membersList, associationKind);
+    const members = membersList.length;
     const doc = await this.associationModel.create({
       ownerUserId: new Types.ObjectId(ownerUserId),
       ...dto,
@@ -69,7 +70,8 @@ export class AssociationsService {
     const update: any = { ...dto };
     const kind = dto.associationKind ?? current.associationKind ?? 'rotating';
     if (dto.membersList) {
-      const normalized = this.normalizeMembersList(dto.membersList as any, dto.members ?? current.members, kind);
+      const normalized = this.normalizeMembersList(dto.membersList as any, kind);
+      this.assertValidAssociationMembers(normalized, kind);
       const locked = Boolean(current.lockOrder);
       if (locked) {
         const byId = new Map((current.membersList ?? []).map((m: any) => [m.id, m.turnOrder]));
@@ -82,7 +84,7 @@ export class AssociationsService {
       }
       update.members = update.membersList.length;
     } else if (typeof dto.members === 'number') {
-      update.members = dto.members;
+      update.members = current.membersList?.length ?? current.members;
     }
     if (kind === 'family' && update.membersList) {
       update.membersList = update.membersList.map((m: any) => ({ ...m, isReceiver: false }));
@@ -136,12 +138,21 @@ export class AssociationsService {
     if (!doc) throw new NotFoundException('Association not found');
 
     const membersList = doc.membersList ?? [];
+    if (membersList.length < 2) {
+      throw new BadRequestException('Association must contain at least 2 members before closing a month');
+    }
     const paidMembers = membersList.filter((m: any) => m.isPaid);
+    if (paidMembers.length === 0) {
+      throw new BadRequestException('At least one paid member is required to close the month');
+    }
     const paidMemberIds = paidMembers.map((m: any) => m.id).filter(Boolean);
     const paidCount = paidMembers.length;
     const totalCollected = paidCount * Number(doc.monthlyAmount ?? 0);
 
     const receiver = membersList.find((m: any) => m.isReceiver);
+    if (doc.associationKind !== 'family' && !receiver) {
+      throw new BadRequestException('A current receiver must be selected before closing the month');
+    }
     const receiverId = receiver?.id;
     const receiverName = receiver?.name;
 
@@ -210,6 +221,9 @@ export class AssociationsService {
       ownerUserId: new Types.ObjectId(ownerUserId),
     });
     if (!doc) throw new NotFoundException('Association not found');
+    if (doc.associationKind !== 'family') {
+      throw new BadRequestException('Fund transactions are only available for family associations');
+    }
 
     const amt = Number(input.amount ?? 0);
     const isOut = input.type === 'out';
@@ -261,6 +275,9 @@ export class AssociationsService {
       ownerUserId: new Types.ObjectId(ownerUserId),
     });
     if (!doc) throw new NotFoundException('Association not found');
+    if (doc.associationKind !== 'family') {
+      throw new BadRequestException('Fund approvals are only available for family associations');
+    }
     const tx = (doc.fundTransactions ?? []).find((t: any) => t.id === input.transactionId);
     if (!tx) throw new NotFoundException('Transaction not found');
     if (tx.status === 'approved') return this.toPublic(doc);
@@ -315,34 +332,63 @@ export class AssociationsService {
 
   private normalizeMembersList(
     list: Array<{ id?: string; name?: string; phone?: string; turnOrder?: number; isPaid?: boolean; isReceiver?: boolean }>,
-    membersCount?: number,
     associationKind: 'rotating' | 'family' = 'rotating',
   ) {
-    const sorted = [...(list ?? [])].sort((a, b) => {
-      const an = (a.name ?? '').toLowerCase();
-      const bn = (b.name ?? '').toLowerCase();
-      if (an && bn && an !== bn) return an.localeCompare(bn, 'ar');
-      return (a.phone ?? '').localeCompare(b.phone ?? '');
-    });
-    const normalized = sorted.map((m, idx) => ({
+    const normalized = (list ?? [])
+      .map((m, idx) => ({
       id: m.id || new Types.ObjectId().toString(),
       name: m.name?.trim?.() ?? '',
       phone: m.phone?.trim?.() ?? '',
       turnOrder: m.turnOrder ?? idx + 1,
       isPaid: Boolean(m.isPaid),
       isReceiver: associationKind === 'family' ? false : Boolean(m.isReceiver),
+      }))
+      .filter((member) => member.name || member.phone);
+
+    const sorted = [...normalized].sort((a, b) => {
+      const aOrder = a.turnOrder ?? 0;
+      const bOrder = b.turnOrder ?? 0;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return (a.name ?? '').localeCompare(b.name ?? '', 'ar');
+    });
+
+    const primaryReceiverId =
+      associationKind === 'family'
+        ? undefined
+        : sorted.find((member) => member.isReceiver)?.id ?? sorted[0]?.id;
+
+    return sorted.map((member, idx) => ({
+      ...member,
+      turnOrder: idx + 1,
+      isReceiver: associationKind === 'family' ? false : member.id === primaryReceiverId,
     }));
-    if (normalized.length === 0 && membersCount && membersCount > 0) {
-      return Array.from({ length: membersCount }).map((_, idx) => ({
-        id: new Types.ObjectId().toString(),
-        name: '',
-        phone: '',
-        turnOrder: idx + 1,
-        isPaid: false,
-        isReceiver: associationKind === 'family' ? false : false,
-      }));
+  }
+
+  private assertValidAssociationMembers(
+    membersList: Array<{ id?: string; name?: string; phone?: string; isReceiver?: boolean }>,
+    associationKind: 'rotating' | 'family',
+  ) {
+    if (!membersList.length || membersList.length < 2) {
+      throw new BadRequestException('Association must include at least 2 members');
     }
-    return normalized;
+
+    const names = new Set<string>();
+    for (const member of membersList) {
+      const name = member.name?.trim?.() ?? '';
+      if (!name) {
+        throw new BadRequestException('Every association member must have a name');
+      }
+
+      const normalizedName = name.toLocaleLowerCase('ar');
+      if (names.has(normalizedName)) {
+        throw new BadRequestException('Association members must have unique names');
+      }
+      names.add(normalizedName);
+    }
+
+    if (associationKind !== 'family' && !membersList.some((member) => member.isReceiver)) {
+      membersList[0].isReceiver = true;
+    }
   }
 
   private async sendCloseMonthNotifications(ownerUserId: string, doc: AssociationDocument) {

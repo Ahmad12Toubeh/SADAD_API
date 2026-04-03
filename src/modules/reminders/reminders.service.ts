@@ -11,6 +11,7 @@ import { SettingsService } from '../settings/settings.service';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { SendReminderDto } from './dto/send-reminder.dto';
 import { Reminder, ReminderDocument } from './schemas/reminder.schema';
+import { normalizeJordanPhoneForWhatsapp } from '../../common/validators/phone.validator';
 
 @Injectable()
 export class RemindersService {
@@ -533,7 +534,7 @@ export class RemindersService {
   }
 
   private buildWhatsappLink(phone: string, message: string) {
-    const normalizedPhone = String(phone).replace(/\D/g, '');
+    const normalizedPhone = normalizeJordanPhoneForWhatsapp(phone);
     if (!normalizedPhone) {
       throw new BadRequestException('Customer phone is invalid');
     }

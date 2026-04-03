@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Matches, Min } from 'class-validator';
+import { JORDAN_07_PHONE_MESSAGE, JORDAN_07_PHONE_REGEX } from '../../../common/validators/phone.validator';
 
 export class GuarantorInputDto {
   @ApiProperty({ example: 'Ahmed Abdullah' })
@@ -9,6 +10,7 @@ export class GuarantorInputDto {
 
   @ApiProperty({ example: '+962791234567' })
   @IsString()
+  @Matches(JORDAN_07_PHONE_REGEX, { message: JORDAN_07_PHONE_MESSAGE })
   phone: string;
 
   @ApiPropertyOptional({ example: 'Optional notes' })
