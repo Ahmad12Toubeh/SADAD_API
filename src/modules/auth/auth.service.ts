@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -95,36 +95,35 @@ export class AuthService {
     const email = dto.email.trim().toLowerCase();
     const user = await this.usersService.findByEmail(email);
 
-    // Return generic response even if account does not exist.
     if (!user) {
-      return { success: true, message: 'If this email exists, reset instructions were generated.' };
+      throw new NotFoundException('No account found with this email');
     }
 
-    const token = crypto.randomBytes(24).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const code = String(crypto.randomInt(0, 10000)).padStart(4, '0');
+    const tokenHash = crypto.createHash('sha256').update(code).digest('hex');
     const expiresAt = new Date(Date.now() + 1000 * 60 * 15); // 15 minutes
 
     await this.usersService.setResetPasswordToken(email, tokenHash, expiresAt);
-    await this.sendResetPasswordEmail(email, token);
+    await this.sendResetPasswordEmail(email, code);
 
     const returnTokenInResponse = this.configService.get<string>('AUTH_RETURN_RESET_TOKEN') === 'true';
     if (returnTokenInResponse) {
-      return { success: true, resetToken: token, expiresAt };
+      return { success: true, resetCode: code, resetToken: code, expiresAt };
     }
     return { success: true, message: 'If this email exists, reset instructions were sent.' };
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    const rawToken = dto.token?.trim();
-    if (!rawToken) {
-      throw new BadRequestException('Reset token is required');
+    const rawCode = dto.code?.trim();
+    if (!rawCode) {
+      throw new BadRequestException('Reset code is required');
     }
 
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawCode).digest('hex');
     const user = await this.usersService.findByResetTokenHash(tokenHash);
 
     if (!user) {
-      throw new BadRequestException('Invalid or expired reset token');
+      throw new BadRequestException('Invalid or expired reset code');
     }
 
     const nextHash = await bcrypt.hash(dto.newPassword, 10);
@@ -134,10 +133,7 @@ export class AuthService {
     return { success: true, message: 'Password reset successfully' };
   }
 
-  private async sendResetPasswordEmail(email: string, token: string) {
-    const appUrl = this.configService.get<string>('APP_BASE_URL') || 'http://localhost:3000';
-    const resetUrl = `${appUrl}/reset-password?token=${encodeURIComponent(token)}`;
-
+  private async sendResetPasswordEmail(email: string, code: string) {
     const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
     const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL');
 
@@ -153,7 +149,7 @@ export class AuthService {
             from: fromEmail,
             to: [email],
             subject: 'Reset your SADAD password',
-            html: `<p>Click the link below to reset your password. This link expires in 15 minutes.</p><p><a href="${resetUrl}">${resetUrl}</a></p>`,
+            html: `<p>Your SADAD reset code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:3px;">${code}</p><p>This code expires in 15 minutes.</p>`,
           }),
         });
 
@@ -176,8 +172,9 @@ export class AuthService {
           <div style="font-family: Arial, sans-serif; line-height: 1.7; color: #0f172a;">
             <p>Hello,</p>
             <p>We received a request to reset your SADAD account password.</p>
-            <p>This link expires in 15 minutes:</p>
-            <p><a href="${resetUrl}">${resetUrl}</a></p>
+            <p>Your reset code is:</p>
+            <p style="font-size:24px;font-weight:700;letter-spacing:3px;">${code}</p>
+            <p>This code expires in 15 minutes.</p>
             <p>If you did not request this change, you can ignore this email.</p>
           </div>
         `,
@@ -192,7 +189,7 @@ export class AuthService {
       process.env.NODE_ENV !== 'production';
     if (allowLog) {
       // Fallback for local development
-      this.logger.log(`Password reset URL for ${email}: ${resetUrl}`);
+      this.logger.log(`Password reset code for ${email}: ${code}`);
     }
   }
 
