@@ -50,6 +50,12 @@ export class CreateDebtDto {
   @Min(1)
   principalAmount: number;
 
+  @ApiPropertyOptional({ example: 500, description: 'Amount paid upfront when creating debt' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  initialPaymentAmount?: number;
+
   @ApiPropertyOptional({ enum: ['invoice', 'loan', 'other'], example: 'invoice' })
   @IsOptional()
   @IsIn(['invoice', 'loan', 'other'])

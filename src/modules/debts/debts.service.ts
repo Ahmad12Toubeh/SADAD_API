@@ -37,6 +37,14 @@ export class DebtsService {
     if (dto.planType === 'installments' && !dto.installmentsPlan) {
       throw new BadRequestException('installmentsPlan is required for installments debts');
     }
+    const initialPaymentAmount = Number(dto.initialPaymentAmount ?? 0);
+    if (!Number.isFinite(initialPaymentAmount) || initialPaymentAmount < 0) {
+      throw new BadRequestException('initialPaymentAmount must be a valid number >= 0');
+    }
+    if (initialPaymentAmount > dto.principalAmount) {
+      throw new BadRequestException('initialPaymentAmount cannot exceed principalAmount');
+    }
+    dto.initialPaymentAmount = Number(initialPaymentAmount.toFixed(2));
 
     if (dto.dueDate) {
       const parsed = new Date(dto.dueDate);
@@ -113,7 +121,7 @@ export class DebtsService {
     const [installments, guarantor] = await Promise.all([
       this.installmentModel
         .find({ ownerUserId: new Types.ObjectId(ownerUserId), debtId: debt._id })
-        .sort({ dueDate: 1 })
+        .sort({ isInitialPayment: -1, dueDate: 1 })
         .exec(),
       this.guarantorsService.findOne(ownerUserId, debt._id.toString()).catch(() => null),
     ]);
@@ -189,7 +197,7 @@ export class DebtsService {
   async listInstallments(ownerUserId: string, debtId: string) {
     const items = await this.installmentModel
       .find({ ownerUserId: new Types.ObjectId(ownerUserId), debtId: new Types.ObjectId(debtId) })
-      .sort({ dueDate: 1 })
+      .sort({ isInitialPayment: -1, dueDate: 1 })
       .exec();
     return { items: items.map((i) => this.toPublicInstallment(i)) };
   }
@@ -219,6 +227,8 @@ export class DebtsService {
 
   private async generateInstallments(ownerUserId: string, debt: DebtDocument, dto: CreateDebtDto) {
     const startDue = dto.dueDate ? new Date(dto.dueDate) : new Date();
+    const initialPaymentAmount = Number(dto.initialPaymentAmount ?? 0);
+    const remainingAmount = Number((dto.principalAmount - initialPaymentAmount).toFixed(2));
 
     let count = 1;
     let period: 'monthly' | 'weekly' = 'monthly';
@@ -227,12 +237,28 @@ export class DebtsService {
       period = dto.installmentsPlan!.period;
     }
 
-    const base = Math.floor((dto.principalAmount / count) * 100) / 100;
     const installments: Array<Partial<Installment>> = [];
+    if (initialPaymentAmount > 0) {
+      installments.push({
+        ownerUserId: new Types.ObjectId(ownerUserId),
+        debtId: debt._id,
+        amount: initialPaymentAmount,
+        dueDate: new Date(),
+        status: 'paid',
+        paidAt: new Date(),
+        isInitialPayment: true,
+      });
+    }
+
+    if (remainingAmount <= 0) {
+      return this.installmentModel.insertMany(installments);
+    }
+
+    const base = Math.floor((remainingAmount / count) * 100) / 100;
     let allocated = 0;
 
     for (let i = 0; i < count; i++) {
-      const amount = i === count - 1 ? Number((dto.principalAmount - allocated).toFixed(2)) : base;
+      const amount = i === count - 1 ? Number((remainingAmount - allocated).toFixed(2)) : base;
       allocated = Number((allocated + amount).toFixed(2));
 
       const dueDate =
@@ -295,6 +321,7 @@ export class DebtsService {
       dueDate: obj.dueDate,
       status: obj.status,
       paidAt: obj.paidAt ?? null,
+      isInitialPayment: obj.isInitialPayment ?? false,
       createdAt: obj.createdAt,
       updatedAt: obj.updatedAt,
     };

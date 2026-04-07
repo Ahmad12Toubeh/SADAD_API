@@ -23,8 +23,10 @@ export class Installment {
 
   @Prop({ required: false })
   paidAt?: Date;
+
+  @Prop({ required: false, default: false, index: true })
+  isInitialPayment?: boolean;
 }
 
 export const InstallmentSchema = SchemaFactory.createForClass(Installment);
 InstallmentSchema.index({ ownerUserId: 1, debtId: 1, dueDate: 1 });
-
