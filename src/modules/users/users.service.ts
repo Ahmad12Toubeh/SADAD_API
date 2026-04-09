@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from './schemas/user.schema';
 import * as bcrypt from 'bcryptjs';
+import { addMonths, getTrialEndsAt } from './subscription.utils';
 
 @Injectable()
 export class UsersService {
@@ -22,6 +23,8 @@ export class UsersService {
       fullName: userData.fullName,
       phone: userData.phone,
       passwordHash,
+      trialStartedAt: new Date(),
+      trialEndsAt: getTrialEndsAt(),
     });
     return newUser.save();
   }
@@ -83,5 +86,63 @@ export class UsersService {
         { new: true },
       )
       .exec();
+  }
+
+  async listAllBasicUsers() {
+    return this.userModel
+      .find({})
+      .sort({ createdAt: -1 })
+      .select(
+        'email fullName role isActive createdAt trialStartedAt trialEndsAt subscriptionStartedAt subscriptionEndsAt subscriptionMonths subscriptionPlanLabel',
+      )
+      .exec();
+  }
+
+  async activateSubscription(input: {
+    userId: string;
+    months: number;
+    planLabel?: string;
+    activatedBy: string;
+    notes?: string;
+  }) {
+    const now = new Date();
+    const endsAt = addMonths(now, input.months);
+
+    return this.userModel
+      .findByIdAndUpdate(
+        input.userId,
+        {
+          $set: {
+            subscriptionStartedAt: now,
+            subscriptionEndsAt: endsAt,
+            subscriptionMonths: input.months,
+            subscriptionPlanLabel: input.planLabel?.trim() || `${input.months} month plan`,
+            subscriptionActivatedBy: input.activatedBy,
+            subscriptionNotes: input.notes?.trim() || undefined,
+          },
+        },
+        { new: true },
+      )
+      .exec();
+  }
+
+  async countActiveSubscriptions(now = new Date()) {
+    return this.userModel.countDocuments({
+      subscriptionEndsAt: { $gt: now },
+    });
+  }
+
+  async countExpiringSubscriptions(days: number, now = new Date()) {
+    const end = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+    return this.userModel.countDocuments({
+      subscriptionEndsAt: { $gt: now, $lte: end },
+    });
+  }
+
+  async countTrialUsers(now = new Date()) {
+    return this.userModel.countDocuments({
+      trialEndsAt: { $gt: now },
+      $or: [{ subscriptionEndsAt: { $exists: false } }, { subscriptionEndsAt: null }, { subscriptionEndsAt: { $lte: now } }],
+    });
   }
 }
