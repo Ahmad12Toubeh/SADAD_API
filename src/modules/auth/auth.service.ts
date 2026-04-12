@@ -65,12 +65,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    // Ensure trial window is always based on createdAt for legacy users.
+    await this.usersService.normalizeTrialWindowIfNeeded(user);
+
     const subscription = buildSubscriptionSummary(user);
     if (subscription.isExpired) {
       throw new ForbiddenException({
         message: 'Your free trial has ended. Contact the project owner to activate a paid plan.',
         code: 'SUBSCRIPTION_EXPIRED',
-        messageKey: 'errors.common.badRequest',
+        messageKey: 'errors.subscription.expired',
       });
     }
 

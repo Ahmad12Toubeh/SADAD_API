@@ -16,6 +16,7 @@ import { RemindersModule } from './modules/reminders/reminders.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { AssociationsModule } from './modules/associations/associations.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { MaintenanceModule } from './common/maintenance/maintenance.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 
@@ -58,6 +59,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     AnalyticsModule,
     SettingsModule,
     AssociationsModule,
+    NotificationsModule,
     UploadsModule,
     MaintenanceModule,
   ],

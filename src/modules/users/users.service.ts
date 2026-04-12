@@ -11,6 +11,52 @@ export class UsersService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
   ) {}
 
+  /**
+   * Business rule: free trial is ALWAYS 7 days from account creation time (createdAt).
+   * For legacy users created before adding trial fields, we may have persisted a wrong
+   * window (e.g. from "today"). This normalizes the stored window to match createdAt.
+   */
+  async normalizeTrialWindowIfNeeded(user: UserDocument) {
+    const createdAt = (user as any)?.createdAt as Date | undefined;
+    if (!createdAt) return;
+
+    // If the user has ever been activated on a paid subscription, we keep the stored trial window as-is.
+    // Trial is no longer relevant and we don't want to rewrite historical data.
+    if (user.subscriptionStartedAt) return;
+
+    const expectedTrialStartedAt = createdAt;
+    const expectedTrialEndsAt = getTrialEndsAt(createdAt);
+    const currentTrialStartedAt = user.trialStartedAt;
+    const currentTrialEndsAt = user.trialEndsAt;
+
+    // Allow small drift from save-time differences (5 minutes).
+    const DRIFT_MS = 5 * 60 * 1000;
+    const startedAtOk =
+      currentTrialStartedAt instanceof Date &&
+      Math.abs(currentTrialStartedAt.getTime() - expectedTrialStartedAt.getTime()) <= DRIFT_MS;
+    const endsAtOk =
+      currentTrialEndsAt instanceof Date &&
+      Math.abs(currentTrialEndsAt.getTime() - expectedTrialEndsAt.getTime()) <= DRIFT_MS;
+
+    if (startedAtOk && endsAtOk) return;
+
+    await this.userModel
+      .updateOne(
+        { _id: user._id },
+        {
+          $set: {
+            trialStartedAt: expectedTrialStartedAt,
+            trialEndsAt: expectedTrialEndsAt,
+          },
+        },
+      )
+      .exec();
+
+    // Keep in-memory doc consistent for the current request.
+    user.trialStartedAt = expectedTrialStartedAt;
+    user.trialEndsAt = expectedTrialEndsAt;
+  }
+
   async create(userData: {
     email: string;
     password: string;
@@ -26,7 +72,10 @@ export class UsersService {
       trialStartedAt: new Date(),
       trialEndsAt: getTrialEndsAt(),
     });
-    return newUser.save();
+    const saved = await newUser.save();
+    // Align the stored trial window with createdAt to make the rule consistent.
+    await this.normalizeTrialWindowIfNeeded(saved);
+    return saved;
   }
 
   async findByEmail(email: string): Promise<UserDocument | undefined> {
@@ -41,7 +90,9 @@ export class UsersService {
   }
 
   async findById(id: string): Promise<UserDocument | undefined> {
-    return this.userModel.findById(id).exec();
+    const user = await this.userModel.findById(id).exec();
+    if (user) await this.normalizeTrialWindowIfNeeded(user);
+    return user ?? undefined;
   }
 
   async updateProfile(userId: string, dto: { fullName?: string; phone?: string; avatarUrl?: string; avatarPublicId?: string }) {
