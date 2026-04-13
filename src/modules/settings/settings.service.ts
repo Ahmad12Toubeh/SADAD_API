@@ -267,18 +267,28 @@ export class SettingsService {
   }
 
   async updateStore(ownerUserId: string, dto: UpdateStoreSettingsDto) {
-    const doc = await this.storeModel.findOneAndUpdate(
-      { ownerUserId: new Types.ObjectId(ownerUserId) },
-      { $set: { ...dto }, $setOnInsert: { currency: dto.currency ?? 'JOD' } },
-      { upsert: true, new: true },
-    );
-    return {
-      currency: doc.currency,
-      storeName: doc.storeName ?? null,
-      businessType: doc.businessType ?? null,
-      address: doc.address ?? null,
-      cr: doc.cr ?? null,
-    };
+    try {
+      // Remove currency from $set to avoid conflict with $setOnInsert
+      const { currency, ...otherFields } = dto as any;
+      const doc = await this.storeModel.findOneAndUpdate(
+        { ownerUserId: new Types.ObjectId(ownerUserId) },
+        {
+          $set: otherFields,
+          $setOnInsert: { currency: currency ?? 'JOD' }
+        },
+        { upsert: true, new: true },
+      );
+      return {
+        currency: doc.currency,
+        storeName: doc.storeName ?? null,
+        businessType: doc.businessType ?? null,
+        address: doc.address ?? null,
+        cr: doc.cr ?? null,
+      };
+    } catch (error) {
+      console.error('Error in updateStore:', error);
+      throw error;
+    }
   }
 
   async getNotifications(ownerUserId: string) {
