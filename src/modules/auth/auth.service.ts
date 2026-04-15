@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -13,6 +13,7 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { buildSubscriptionSummary } from '../users/subscription.utils';
 
 @Injectable()
 export class AuthService {
@@ -64,14 +65,28 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    // Ensure trial window is always based on createdAt for legacy users.
+    await this.usersService.normalizeTrialWindowIfNeeded(user);
+
+    const subscription = buildSubscriptionSummary(user);
+    if (subscription.isExpired) {
+      throw new ForbiddenException({
+        message: 'Your free trial has ended. Contact the project owner to activate a paid plan.',
+        code: 'SUBSCRIPTION_EXPIRED',
+        messageKey: 'errors.subscription.expired',
+      });
+    }
+
     const payload = { sub: user._id, email: user.email, role: user.role };
+    const accessTokenExpiresIn = this.getAccountTokenExpiresIn(user);
     return {
-      accessToken: await this.jwtService.signAsync(payload),
+      accessToken: await this.jwtService.signAsync(payload, { expiresIn: accessTokenExpiresIn }),
       user: {
         id: user._id,
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        subscription,
       },
     };
   }
@@ -88,7 +103,35 @@ export class AuthService {
       email: user.email,
       fullName: user.fullName,
       role: user.role,
+      subscription: buildSubscriptionSummary(user),
     };
+  }
+
+  private getAccountTokenExpiresIn(user: UserDocument) {
+    const fallbackMs = this.getAuthCookieMaxAgeMs();
+    const summary = buildSubscriptionSummary(user);
+    const accountTtlMs =
+      summary.stage === 'active'
+        ? Math.max(1_000, (summary.subscriptionEndsAt?.getTime() ?? Date.now()) - Date.now())
+        : Math.max(1_000, (summary.trialEndsAt?.getTime() ?? Date.now()) - Date.now());
+
+    const ttlMs = Math.min(fallbackMs, accountTtlMs);
+    return Math.max(1, Math.floor(ttlMs / 1000));
+  }
+
+  private getAuthCookieMaxAgeMs() {
+    const raw = this.configService.get<string>('JWT_EXPIRATION') ?? '7d';
+    const match = /^(\d+)([smhd])$/.exec(raw);
+    if (!match) return 7 * 24 * 60 * 60 * 1000;
+    const value = Number(match[1]);
+    const unit = match[2];
+    const multipliers: Record<string, number> = {
+      s: 1000,
+      m: 60 * 1000,
+      h: 60 * 60 * 1000,
+      d: 24 * 60 * 60 * 1000,
+    };
+    return value * (multipliers[unit] ?? 1000);
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {

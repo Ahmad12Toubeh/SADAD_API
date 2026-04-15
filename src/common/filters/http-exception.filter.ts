@@ -30,8 +30,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
         ? res
         : res?.message ?? exception.message ?? 'Request failed';
 
-    let code = 'HTTP_ERROR';
-    let messageKey = 'errors.common.unknown';
+    let code = res?.code ?? 'HTTP_ERROR';
+    let messageKey = res?.messageKey ?? 'errors.common.unknown';
     let details: unknown = undefined;
 
     // ValidationPipe errors come as array of messages.
@@ -48,6 +48,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
     } else if (status === HttpStatus.NOT_FOUND) {
       code = 'RESOURCE_NOT_FOUND';
       messageKey = 'errors.common.notFound';
+    } else if (status === HttpStatus.FORBIDDEN && !res?.code) {
+      code = 'FORBIDDEN';
+      messageKey = 'errors.common.unknown';
     } else if (status === HttpStatus.BAD_REQUEST) {
       code = 'BAD_REQUEST';
       messageKey = 'errors.common.badRequest';
@@ -69,4 +72,3 @@ export class HttpExceptionFilter implements ExceptionFilter {
     response.status(status).json(payload);
   }
 }
-

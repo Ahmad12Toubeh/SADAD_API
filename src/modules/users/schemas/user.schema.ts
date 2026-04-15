@@ -33,6 +33,30 @@ export class User {
   @Prop({ default: true })
   isActive: boolean;
 
+  @Prop({ required: true, default: Date.now })
+  trialStartedAt: Date;
+
+  @Prop({ required: true, default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) })
+  trialEndsAt: Date;
+
+  @Prop()
+  subscriptionStartedAt?: Date;
+
+  @Prop()
+  subscriptionEndsAt?: Date;
+
+  @Prop()
+  subscriptionMonths?: number;
+
+  @Prop({ trim: true })
+  subscriptionPlanLabel?: string;
+
+  @Prop({ trim: true })
+  subscriptionActivatedBy?: string;
+
+  @Prop({ trim: true })
+  subscriptionNotes?: string;
+
   @Prop({ required: false, select: false })
   resetPasswordTokenHash?: string;
 
